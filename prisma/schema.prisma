@@ -1,0 +1,323 @@
+// School Scheduler — data entry for the timetable solver (model B: the school as the
+// master scheduler describes it). Schema changes: `npm run db:push` then `npm run db:generate`.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum SubjectLevel {
+  A
+  B
+  C
+  NONE
+}
+
+enum Year {
+  A
+  B
+  C
+  NONE
+}
+
+// Θ = theoretical direction, Π = practical, Ξ = hotel/catering, ΕΜ = special unit
+enum Direction {
+  THEORY
+  PRACTICE
+  HOTEL
+  SPECIAL
+  NONE
+}
+
+enum Gender {
+  M
+  F
+  NONE
+}
+
+// ALL = the whole home group(s); SUBSET = the named pupils in LessonStudent
+enum Audience {
+  ALL
+  SUBSET
+}
+
+// ST = ΣΤ support group, EXST = ΕΞΣΤ (individual-support teachers), AST = ΑΣΤ one pupil.
+// A support lesson runs *during* its host lesson (hostLessonId).
+enum SupportKind {
+  ST
+  EXST
+  AST
+}
+
+// ELECTIVE = ζώνη επιλογών, LEVEL = year-wide level groups (ΒΠΑΓΓΛ), PARALLEL = core ∥ advanced sections
+enum BandKind {
+  ELECTIVE
+  LEVEL
+  PARALLEL
+}
+
+// ANY = any room (of roomKind when set); PREFER = the listed rooms in order, else any;
+// ONLY = one of the listed rooms, nothing else
+enum RoomMode {
+  ANY
+  PREFER
+  ONLY
+}
+
+enum Strength {
+  HARD
+  SOFT
+}
+
+enum RuleMode {
+  HARD
+  SOFT
+  OFF
+}
+
+// ─── People ───────────────────────────────────────────────────────────────────
+
+model Teacher {
+  id         String  @id @default(cuid())
+  // Display name in the school's coding, e.g. "ΗΥ-ΔΟΚΙΜΗ Α. ΒΔ"
+  name       String  @unique
+  firstName  String?
+  department String?
+  // Teaching obligation in periods per week (24, 22, 20, 18 …)
+  obligation Int     @default(24)
+  // Periods not available for lessons: duties, other school, reductions
+  reduction  Int     @default(0)
+  active     Boolean @default(true)
+  note       String?
+
+  lessons        Lesson[]
+  unavailability TeacherUnavailability[]
+  ruleOverrides  RuleOverride[]
+}
+
+model TeacherUnavailability {
+  teacherId String
+  teacher   Teacher  @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  day       Int // 1 = Monday … 5 = Friday
+  period    Int // 1-based
+  kind      Strength @default(HARD)
+
+  @@id([teacherId, day, period])
+}
+
+model Subject {
+  id             String       @id @default(cuid())
+  name           String
+  code           String? // ministry subject code, e.g. 410222010
+  level          SubjectLevel @default(NONE)
+  periodsPerWeek Int?
+  note           String?
+
+  lessons Lesson[]
+
+  @@unique([name, level])
+}
+
+// Τμήμα: the only kind of group the user enters.
+model HomeGroup {
+  id        String    @id @default(cuid())
+  name      String    @unique
+  year      Year      @default(NONE)
+  direction Direction @default(NONE)
+  note      String?
+
+  students Student[]
+  lessons  LessonHomeGroup[]
+}
+
+model Student {
+  id          String     @id @default(cuid())
+  name        String
+  externalId  String?
+  homeGroupId String?
+  homeGroup   HomeGroup? @relation(fields: [homeGroupId], references: [id], onDelete: SetNull)
+  gender      Gender     @default(NONE)
+
+  lessons LessonStudent[]
+  excusals StudentExcusal[]
+
+  @@index([homeGroupId])
+}
+
+// ─── Rooms ────────────────────────────────────────────────────────────────────
+
+// ─── Timetables (solver results) ──────────────────────────────────────────────
+
+model Timetable {
+  id        String    @id @default(cuid())
+  name      String
+  createdAt DateTime  @default(now())
+  solvedAt  DateTime?
+  status    String
+  summary   Json
+
+  placements Placement[]
+}
+
+model Placement {
+  id          String    @id @default(cuid())
+  timetableId String
+  timetable   Timetable @relation(fields: [timetableId], references: [id], onDelete: Cascade)
+  lessonId    String
+  lesson      Lesson    @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  day         Int
+  period      Int
+  roomId      String?
+  room        Room?     @relation(fields: [roomId], references: [id], onDelete: SetNull)
+
+  @@index([timetableId, lessonId])
+  @@index([lessonId])
+}
+
+model Room {
+  id       String  @id @default(cuid())
+  name     String  @unique
+  // Free text type: "Αίθουσα", "Εργ. Η/Υ", "Κουζίνα", "Γυμναστήριο" …
+  kind     String?
+  capacity Int?
+  note     String?
+
+  lessons LessonRoom[]
+  placements Placement[]
+}
+
+// Preferred / allowed rooms of a lesson, in order of preference (rank 0 first)
+model LessonRoom {
+  lessonId String
+  lesson   Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  roomId   String
+  room     Room   @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  rank     Int    @default(0)
+
+  @@id([lessonId, roomId])
+  @@index([roomId])
+}
+
+// ─── Lessons and structures ───────────────────────────────────────────────────
+
+// Ζώνη: every lesson with this bandId runs at the same periods.
+model Band {
+  id   String   @id @default(cuid())
+  name String   @unique
+  kind       BandKind @default(ELECTIVE)
+  note       String?
+  fixedSlots Json? // the zone grid: [{day, periods}] every option runs on
+
+  lessons Lesson[]
+}
+
+// One κατανομή row: subject × teacher × periods, for one or more home groups.
+model Lesson {
+  id        String   @id @default(cuid())
+  subjectId String
+  subject   Subject  @relation(fields: [subjectId], references: [id])
+  // null = vacancy (no teacher yet)
+  teacherId String?
+  teacher   Teacher? @relation(fields: [teacherId], references: [id], onDelete: SetNull)
+  periods   Int
+  // Block shape: daily chunks summing to `periods`, e.g. "2+1+1", "3+3"
+  shape     String
+  // Long lesson (full-day workshop): exempt from the daily/consecutive limits
+  long      Boolean  @default(false)
+  // Legacy free-text room (kept for old data); rooms are now in LessonRoom + roomMode/roomKind
+  fixedRoom String?
+  roomMode  RoomMode @default(ANY)
+  roomKind  String?
+  sameRoom  Boolean  @default(false) // every period of the lesson in one room (hard for the solver)
+  rooms     LessonRoom[]
+  placements Placement[]
+  excusals StudentExcusal[]
+  // Pre-assigned placement, e.g. [{"day":1,"periods":[1,2,3,4,5,6,7]}] for the hotel workshops
+  fixedSlots Json?
+  note      String?
+
+  audience Audience @default(ALL)
+
+  // Support (ΣΤ / ΕΞΣΤ / ΑΣΤ): runs during the host lesson, for pupils not in it.
+  hostLessonId String?
+  hostLesson   Lesson?      @relation("During", fields: [hostLessonId], references: [id], onDelete: Cascade)
+  supportKind  SupportKind?
+  supports     Lesson[]     @relation("During")
+
+  bandId String?
+  band   Band?   @relation(fields: [bandId], references: [id], onDelete: SetNull)
+
+  homeGroups LessonHomeGroup[]
+  students   LessonStudent[]
+
+  @@index([teacherId])
+  @@index([hostLessonId])
+  @@index([bandId])
+}
+
+// 1 row = plain lesson of that τμήμα; 2+ rows = συνδιδασκαλία
+model LessonHomeGroup {
+  lessonId    String
+  lesson      Lesson    @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  homeGroupId String
+  homeGroup   HomeGroup @relation(fields: [homeGroupId], references: [id], onDelete: Cascade)
+
+  @@id([lessonId, homeGroupId])
+  @@index([homeGroupId])
+}
+
+// Only for audience = SUBSET
+// A lesson a pupil does not attend, as given by the ministry: the room in their week for ΑΣΤ/ΕΞΣΤ.
+model StudentExcusal {
+  studentId String
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  lessonId  String
+  lesson    Lesson  @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@id([studentId, lessonId])
+  @@index([lessonId])
+}
+
+model LessonStudent {
+  lessonId  String
+  lesson    Lesson  @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  studentId String
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@id([lessonId, studentId])
+  @@index([studentId])
+}
+
+// ─── Rules ────────────────────────────────────────────────────────────────────
+
+model Rule {
+  id     String   @id @default(cuid())
+  code   String   @unique // e.g. "T2"; name/description live in messages/*.json
+  mode   RuleMode @default(HARD)
+  weight Int      @default(1)
+  params Json     @default("{}")
+
+  overrides RuleOverride[]
+}
+
+model RuleOverride {
+  ruleId    String
+  rule      Rule     @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  teacherId String
+  teacher   Teacher  @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  mode      RuleMode
+  weight    Int      @default(1)
+
+  @@id([ruleId, teacherId])
+}
+
+model Setting {
+  key   String @id
+  value Json
+}
