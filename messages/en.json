@@ -1,0 +1,643 @@
+{
+  "common": {
+    "appName": "Timetable — Data",
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "teachers": "Teachers",
+    "subjects": "Subjects",
+    "homeGroups": "Home groups",
+    "students": "Students",
+    "lessons": "Lessons",
+    "bands": "Bands",
+    "rules": "Rules",
+    "settings": "Settings",
+    "data": "Import / Export",
+    "rooms": "Rooms",
+    "timetable": "Timetable",
+    "support": "Support",
+    "zoneGrid": "Zone grid"
+  },
+  "table": {
+    "filter": "Filter…",
+    "count": "{shown} of {total}",
+    "add": "New",
+    "save": "Save",
+    "cancel": "Cancel",
+    "empty": "No records",
+    "open": "Open",
+    "delete": "Delete",
+    "deleteTitle": "Delete this record?",
+    "deleteText": "This cannot be undone."
+  },
+  "errors": {
+    "inUse": "Cannot delete: it is still used by other records.",
+    "duplicate": "A record with this name already exists.",
+    "notFound": "Record not found.",
+    "badShape": "The block shape does not add up to the periods (e.g. 2+1+1 for 4 periods).",
+    "badJson": "The file is not valid JSON.",
+    "badFormat": "The file is not an export of this app.",
+    "dangling": "The file refers to names it does not define.",
+    "duringAndBand": "A lesson cannot be both a support lesson and a band option.",
+    "supportNeedsHost": "ΣΤ needs the French lesson it runs during.",
+    "pupilsOutside": "Some selected pupils are not in the lesson's home groups.",
+    "hostIsSupport": "The host lesson cannot itself be a support lesson.",
+    "supportTooLong": "The support lesson has more periods than its host.",
+    "supportGroups": "A support lesson must belong to the host's home groups.",
+    "pupilInHost": "A pupil of the support lesson is already in the host lesson.",
+    "hasSupport": "This lesson has support lessons that depend on it.",
+    "generic": "Something went wrong.",
+    "roomsRequired": "\"Only these rooms\" needs at least one room.",
+    "badTimetable": "The file is not a solver result (timetable JSON).",
+    "timetableMismatch": "Some lessons of the file no longer exist (or changed) in the database. Export again, solve again and load the new result.",
+    "timetableNoLessons": "The file carries no lesson list (older solver output). Load it with npm run import:timetable or solve again.",
+    "onlyStHasHost": "Only ΣΤ runs during a lesson. For ΑΣΤ and ΕΞΣΤ, set the excused lessons on the Support page."
+  },
+  "days": {
+    "mon": "Mon",
+    "tue": "Tue",
+    "wed": "Wed",
+    "thu": "Thu",
+    "fri": "Fri"
+  },
+  "enums": {
+    "level": {
+      "A": "Year 1",
+      "B": "Year 2",
+      "C": "Year 3",
+      "NONE": "—"
+    },
+    "year": {
+      "A": "Year 1",
+      "B": "Year 2",
+      "C": "Year 3",
+      "NONE": "—"
+    },
+    "direction": {
+      "THEORY": "Theoretical (Θ)",
+      "PRACTICE": "Practical (Π)",
+      "HOTEL": "Hotel & catering (Ξ)",
+      "SPECIAL": "Special unit (ΕΜ)",
+      "NONE": "—"
+    },
+    "gender": {
+      "M": "Boy",
+      "F": "Girl",
+      "NONE": "—"
+    },
+    "supportKind": {
+      "ST": "ΣΤ — support group",
+      "EXST": "ΕΞΣΤ — individual-support teachers",
+      "AST": "ΑΣΤ — one pupil"
+    },
+    "bandKind": {
+      "ELECTIVE": "Elective band",
+      "LEVEL": "Level groups",
+      "PARALLEL": "Parallel sections (core / advanced)"
+    },
+    "roomMode": {
+      "ANY": "Any room",
+      "PREFER": "Preferred (in order)",
+      "ONLY": "Only these"
+    }
+  },
+  "picker": {
+    "filter": "Search pupil…",
+    "all": "All",
+    "none": "None",
+    "count": "{n} selected",
+    "empty": "No pupils."
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "description": "Overview of the data and the problems to fix before solving.",
+    "totals": {
+      "teachers": "Teachers",
+      "homeGroups": "Home groups",
+      "students": "Students",
+      "bands": "Bands",
+      "lessons": "Lessons",
+      "periods": "Periods / week"
+    },
+    "warnings": {
+      "title": "Problems",
+      "none": "No problems.",
+      "coverage": "{n} lessons with pupils who have nothing during them",
+      "coverageItem": "{n} pupils without a lesson",
+      "bandProblems": "{n} bands with problems",
+      "periodMismatch": "differing periods",
+      "inTwoOptions": "{n} pupils in two options",
+      "vacancies": "{n} lessons without a teacher",
+      "badShapes": "{n} lessons whose block shape does not match",
+      "pupilsOutside": "{n} lessons naming pupils outside their home groups",
+      "emptyHomeGroups": "{n} home groups without lessons",
+      "studentsWithoutGroup": "{n} students without a home group"
+    },
+    "groups": {
+      "title": "Home groups",
+      "name": "Group",
+      "year": "Year",
+      "students": "Students",
+      "periods": "Periods"
+    },
+    "load": {
+      "title": "Teacher load",
+      "teacher": "Teacher",
+      "department": "Dept.",
+      "obligation": "Obligation",
+      "reduction": "Reduction",
+      "target": "Target",
+      "assigned": "Assigned",
+      "diff": "Diff"
+    }
+  },
+  "teachers": {
+    "title": "Teachers",
+    "description": "Names in the school's coding (e.g. ΗΥ-ΔΟΚΙΜΗ Α. ΒΔ), obligation in periods and reductions (duties, other school).",
+    "col": {
+      "name": "Name",
+      "firstName": "First name",
+      "department": "Dept.",
+      "obligation": "Obligation",
+      "reduction": "Reduction",
+      "assigned": "Assigned / target",
+      "active": "Active",
+      "note": "Note"
+    }
+  },
+  "subjects": {
+    "title": "Subjects",
+    "description": "The same subject in another year is a separate record (e.g. Maths year 1 and Maths year 2).",
+    "col": {
+      "name": "Name",
+      "level": "Year",
+      "code": "Ministry code",
+      "periodsPerWeek": "Periods / week",
+      "lessons": "Lessons",
+      "note": "Note"
+    }
+  },
+  "homeGroups": {
+    "title": "Home groups",
+    "description": "The school's home groups. Open one for its pupils and all its lessons — plain, merged, French with support, electives.",
+    "col": {
+      "name": "Name",
+      "year": "Year",
+      "direction": "Direction",
+      "students": "Pupils",
+      "lessons": "Lessons",
+      "periods": "Periods",
+      "note": "Note"
+    }
+  },
+  "homeGroupDetail": {
+    "back": "Home groups",
+    "notFound": "Home group not found.",
+    "pupils": "{n} pupils",
+    "addLesson": "New lesson",
+    "lessons": "Lessons of the group",
+    "hostBlock": "{subject} + support",
+    "periodsShort": "per.",
+    "inHost": "{n} in the lesson",
+    "uncovered": "{n} pupils without a lesson",
+    "covered": "all pupils covered",
+    "addSupport": "Add support",
+    "duringThis": "During it:",
+    "noSupport": "No support lessons yet.",
+    "merges": "Merged lessons",
+    "bandOptions": "Band options",
+    "students": "Pupils",
+    "bulkAdd": "Bulk add",
+    "noStudents": "No pupils.",
+    "studentsHint": "Pupil names and details are edited on the",
+    "studentsPage": "Students page",
+    "bulkTitle": "Bulk add pupils",
+    "bulkText": "One name per line — they will be added to {group}.",
+    "bulkSave": "Add",
+    "bulkDone": "{n} pupils added",
+    "cancel": "Cancel"
+  },
+  "students": {
+    "title": "Students",
+    "description": "Each pupil belongs to one home group. The subset lessons they take part in (French, support, electives) are shown on the right and set on the lessons.",
+    "col": {
+      "name": "Name",
+      "externalId": "Register no.",
+      "homeGroup": "Home group",
+      "gender": "Gender",
+      "periods": "Periods / week",
+      "lessons": "Subset lessons"
+    },
+    "bulk": {
+      "button": "Bulk add",
+      "title": "Bulk add pupils",
+      "text": "Pick a home group and type one name per line.",
+      "placeholder": "SMITH JOHN\nDOE JANE\n…",
+      "cancel": "Cancel",
+      "save": "Add",
+      "done": "{n} pupils added"
+    },
+    "openLessons": "Pupil's lessons",
+    "lessonsDialog": {
+      "total": "{total} of {week} periods",
+      "attending": "Attends",
+      "left": "Does not attend",
+      "leftForSupport": "for support (ΣΤ)",
+      "leftExcused": "excused",
+      "band": "band {name}",
+      "during": "during {host}",
+      "merge": "merged",
+      "vacancy": "vacancy",
+      "col": {
+        "subject": "Subject",
+        "teacher": "Teacher",
+        "groups": "Groups",
+        "structure": "Structure",
+        "periods": "Per.",
+        "reason": "Reason"
+      }
+    }
+  },
+  "lessons": {
+    "title": "Lessons",
+    "description": "One row = one distribution line: subject × teacher × periods for one or more home groups. Empty teacher = vacancy.",
+    "filter": "Filter…",
+    "count": "{shown} of {total}",
+    "add": "New lesson",
+    "kind": {
+      "ALL": "All",
+      "PLAIN": "Plain",
+      "MERGE": "Merged",
+      "SUPPORT": "Support",
+      "BAND": "Bands",
+      "VACANCY": "Vacancies"
+    },
+    "sameRoomShown": "Same room for the shown lessons:",
+    "sameRoomHint": "Sets, for every lesson the filter shows, whether all its periods are held in one room.",
+    "sameRoomDone": "{n} lessons updated.",
+    "yes": "yes",
+    "no": "no"
+  },
+  "lessonTable": {
+    "empty": "No lessons.",
+    "col": {
+      "groups": "Group",
+      "subject": "Subject",
+      "teacher": "Teacher",
+      "periods": "Per.",
+      "shape": "Shape",
+      "pupils": "Pupils",
+      "structure": "Structure",
+      "note": "Note",
+      "rooms": "Room"
+    },
+    "vacancy": "vacancy",
+    "all": "all",
+    "during": "during",
+    "band": "band",
+    "merge": "merged",
+    "edit": "Edit",
+    "delete": "Delete",
+    "deleteTitle": "Delete this lesson?",
+    "deleteText": "This cannot be undone.",
+    "deleteWithSupport": "The {n} support lessons that run during it will be deleted too.",
+    "cancel": "Cancel",
+    "sameRoom": "Same room for every period"
+  },
+  "lessonForm": {
+    "newTitle": "New lesson",
+    "editTitle": "Edit lesson",
+    "description": "Pick the home group(s), subject, teacher and periods. Two or more home groups make a merged lesson.",
+    "structure": {
+      "PLAIN": "Lesson",
+      "SUPPORT": "Support during another lesson",
+      "BAND": "Band option"
+    },
+    "homeGroups": "Home groups",
+    "mergeHint": "Two or more home groups = merged lesson (one teacher, one room).",
+    "subject": "Subject",
+    "teacher": "Teacher",
+    "vacancy": "— vacancy —",
+    "periods": "Periods / week",
+    "shape": "Shape (e.g. 2+1+1)",
+    "fixedRoom": "Fixed room",
+    "long": "Long (full-day workshop)",
+    "supportKind": "Kind",
+    "during": "During the lesson",
+    "duringHint": "ΣΤ is placed inside the French periods, for pupils who do not attend French.",
+    "band": "Band",
+    "audienceAll": "All pupils of the home groups",
+    "audienceSubset": "Specific pupils",
+    "pickGroupsFirst": "Pick a home group first.",
+    "fixedSlots": "Locked periods",
+    "fixedSlotsHint": "day:periods, e.g. 1:1-7 (Monday 1st–7th), 3:2-7. Empty = left to the solver.",
+    "badFixedSlots": "Locked periods are written as day:from-to, e.g. 1:1-7, 3:2-7.",
+    "note": "Note",
+    "cancel": "Cancel",
+    "save": "Save",
+    "roomMode": "Room",
+    "roomKind": "Room type",
+    "anyKind": "— any —",
+    "roomList": "Rooms (click in order of preference)",
+    "roomHint": "Prefer: the solver tries the rooms in the order you picked. Only: exclusively the chosen rooms. \"Same room\": once a room from the list is chosen, every period of the lesson is held there (hard rule).",
+    "excusedHint": "ΑΣΤ and ΕΞΣΤ have no host lesson: on the Support page you set which lessons each pupil is excused from.",
+    "sameRoom": "Same room for every period"
+  },
+  "bands": {
+    "title": "Bands",
+    "description": "A band is a set of lessons that run at the same time: elective bands, year-wide level groups, parallel core/advanced sections.",
+    "col": {
+      "name": "Name",
+      "kind": "Kind",
+      "homeGroups": "Home groups",
+      "options": "Options",
+      "periods": "Periods",
+      "note": "Note"
+    },
+    "mismatch": "Differing periods"
+  },
+  "bandDetail": {
+    "back": "Bands",
+    "notFound": "Band not found.",
+    "explain": "All options of a band are placed at the same periods, so they must have the same number of periods. Each pupil in at most one option.",
+    "addOption": "New option",
+    "options": "Options",
+    "mismatch": "Differing periods",
+    "inTwo": "{n} pupils in two options",
+    "inNone": "{n} pupils in none",
+    "noOptions": "No options yet."
+  },
+  "teacherDetail": {
+    "back": "Teachers",
+    "notFound": "Teacher not found.",
+    "availability": "Availability",
+    "blocked": "{hard} hard · {soft} preference",
+    "legend": "Click a cell: free → unavailable (hard) → prefer no lesson → free. Click a day for the whole day.",
+    "hardShort": "NO",
+    "softShort": "avoid",
+    "bulkMorning": "Periods 1–4",
+    "bulkAfternoon": "Periods 5–8",
+    "bulkClear": "Clear",
+    "save": "Save",
+    "saved": "Saved",
+    "lessons": "Lessons",
+    "noLessons": "No lessons.",
+    "colGroup": "Group",
+    "colSubject": "Subject",
+    "colPeriods": "Periods",
+    "colShape": "Shape",
+    "colStructure": "Structure",
+    "load": "Load",
+    "obligation": "Obligation",
+    "reduction": "Reduction",
+    "target": "Target",
+    "assigned": "Assigned",
+    "diff": "Diff",
+    "overrides": "Rule overrides",
+    "noOverrides": "The global rules apply.",
+    "editOverrides": "Edit on the Rules page"
+  },
+  "rules": {
+    "title": "Rules",
+    "description": "Each rule is hard, soft (weighted) or off. Teacher rules accept per-teacher overrides.",
+    "col": {
+      "code": "Code",
+      "rule": "Rule",
+      "mode": "Mode",
+      "weight": "Weight",
+      "params": "Parameters (JSON)",
+      "overrides": "Overrides"
+    },
+    "mode": {
+      "HARD": "Hard",
+      "SOFT": "Soft",
+      "OFF": "Off"
+    },
+    "badParams": "Parameters must be a valid JSON object.",
+    "addOverride": "Add override",
+    "removeOverride": "Remove",
+    "noOverrides": "No overrides.",
+    "notPerTeacher": "—"
+  },
+  "ruleCatalog": {
+    "L1": {
+      "name": "Consecutive block periods",
+      "description": "The periods of a block (e.g. a double) are consecutive."
+    },
+    "L4": {
+      "name": "Cross-day blocks",
+      "description": "Last period + first period of the next day is allowed only for the day pairs in the parameters."
+    },
+    "B1": {
+      "name": "Declared block shape",
+      "description": "A lesson follows its shape (e.g. 2+1+1). In the real 2026-27 timetable 19% deviate."
+    },
+    "B2": {
+      "name": "Blocks on different days",
+      "description": "Blocks of one lesson go on different days."
+    },
+    "P1": {
+      "name": "Band lessons simultaneous",
+      "description": "All options of a band run at the same periods; a support lesson runs inside its host's periods."
+    },
+    "S1": {
+      "name": "One lesson per pupil",
+      "description": "No pupil is in two lessons at the same period."
+    },
+    "T1": {
+      "name": "Teacher unavailability",
+      "description": "Periods marked unavailable stay empty."
+    },
+    "T2": {
+      "name": "Max consecutive periods",
+      "description": "Maximum consecutive teaching periods (max). In the 2026-27 timetable 48% of teacher-days exceed 2."
+    },
+    "T3": {
+      "name": "Max last periods",
+      "description": "Maximum last periods per week (max)."
+    },
+    "T4": {
+      "name": "Daily maximum",
+      "description": "Max periods per day (day7 on 7-period days, day8 on 8-period days). longExempt: long workshops are exempt."
+    },
+    "G1": {
+      "name": "Teacher gaps",
+      "description": "Minimise free periods between a teacher's lessons on a day."
+    },
+    "R1": {
+      "name": "One lesson per room",
+      "description": "No room hosts two lessons at the same period."
+    },
+    "R2": {
+      "name": "Room type",
+      "description": "A lesson takes a room of the required type."
+    },
+    "R3": {
+      "name": "Room changes",
+      "description": "Minimise room changes per teacher per day."
+    }
+  },
+  "settings": {
+    "title": "Settings",
+    "description": "The school week and the school name.",
+    "week": "Periods per day",
+    "weekHint": "Monday and Thursday have 8 periods, the other days 7.",
+    "totalSlots": "{n} periods per week in total",
+    "school": "School",
+    "schoolName": "School name",
+    "save": "Save",
+    "saved": "Saved"
+  },
+  "data": {
+    "title": "Import / Export",
+    "description": "One JSON file with all the data — backup, transfer to another machine, and the solver's input.",
+    "export": "Export",
+    "exportText": "Download everything (teachers, subjects, home groups, pupils, bands, lessons, rules, settings).",
+    "download": "Download JSON",
+    "import": "Import",
+    "importText": "Choose an export file (older files with groups/pools are upgraded automatically). It is checked first and its contents are shown.",
+    "merge": "Merge",
+    "replace": "Replace",
+    "mergeHint": "Updates records with the same name and adds new ones. Lessons are replaced.",
+    "replaceHint": "Deletes ALL existing data and loads the file.",
+    "counts": {
+      "teachers": "Teachers",
+      "subjects": "Subjects",
+      "homeGroups": "Home groups",
+      "students": "Pupils",
+      "bands": "Bands",
+      "lessons": "Lessons",
+      "rules": "Rules",
+      "rooms": "Rooms"
+    },
+    "problems": "{n} references to names missing from the file",
+    "applyMerge": "Merge now",
+    "applyReplace": "Replace everything",
+    "imported": "Import complete"
+  },
+  "rooms": {
+    "title": "Rooms",
+    "description": "The school's rooms with type and capacity. The type (e.g. \"Computer lab\", \"Kitchen\") lets a lesson ask for \"any room of this type\".",
+    "col": {
+      "name": "Name",
+      "kind": "Type",
+      "capacity": "Capacity",
+      "lessons": "Lessons",
+      "note": "Note"
+    }
+  },
+  "timetable": {
+    "title": "Timetable",
+    "description": "The solver result per teacher, pupil, home group or room. Click a period for the lesson, its band or its support.",
+    "load": "Load result",
+    "loadHint": "The timetable-*.json the solver writes. Lessons are matched by content (subject, groups, teacher, pupils).",
+    "loaded": "Timetable loaded ({n} periods).",
+    "empty": "No timetable loaded yet. Solve with the solver and load the JSON here.",
+    "solvedAt": "Solved",
+    "periods": "{n} periods",
+    "problems": "{n} lessons with a different number of periods than the file — lessons changed after the solve",
+    "unresolved": "Pupils with a clash",
+    "contradictory": "Impossible lists",
+    "rename": "Rename",
+    "delete": "Delete",
+    "deleteTitle": "Delete timetable?",
+    "deleteText": "Only the result is deleted; the school data is untouched.",
+    "cancel": "Cancel",
+    "view": {
+      "teacher": "Teacher",
+      "student": "Pupil",
+      "homeGroup": "Home group",
+      "room": "Room"
+    },
+    "pick": {
+      "teacher": "Find a teacher…",
+      "student": "Find a pupil (name, register no, group)…",
+      "homeGroup": "Find a home group…",
+      "room": "Find a room…"
+    },
+    "pickOne": "Pick one from the list on the left.",
+    "noPeriods": "No periods in this timetable.",
+    "clash": "Clash",
+    "clashes": "{n} clashes",
+    "unavailable": "Unavailable",
+    "preferFree": "Prefers free",
+    "period": "Period",
+    "total": "{n} periods/week",
+    "vacancy": "vacancy",
+    "panel": {
+      "title": "Lesson",
+      "teacher": "Teacher",
+      "homeGroups": "Home groups",
+      "periods": "Periods",
+      "shape": "Shape",
+      "room": "Room",
+      "roomPref": "Room preference",
+      "pupils": "Pupils",
+      "allPupils": "all pupils of the home groups",
+      "band": "Band {name}",
+      "bandText": "All options of the band run at the same time:",
+      "supportOf": "{kind} during",
+      "otherSupports": "Other supports at the same time",
+      "supports": "Supports running inside it",
+      "slots": "Periods in the week",
+      "edit": "Edit lesson",
+      "this": "current",
+      "noRoom": "no room"
+    }
+  },
+  "support": {
+    "title": "Support",
+    "description": "ΣΤ: one period of Greek and one of Maths, during French. ΑΣΤ and ΕΞΣΤ: they replace the excused lessons set by the ministry. Every pupil must fill all the periods of the week.",
+    "filter": {
+      "problems": "Problems only",
+      "support": "With support",
+      "all": "All pupils"
+    },
+    "search": "Search (name, register no, group)…",
+    "count": "{n} pupils",
+    "col": {
+      "pupil": "Pupil",
+      "group": "Group",
+      "st": "ΣΤ during French",
+      "individual": "ΑΣΤ / ΕΞΣΤ",
+      "excused": "Excused from",
+      "total": "Periods",
+      "problems": "Check"
+    },
+    "add": "+ excuse from…",
+    "remove": "Remove excusal",
+    "issue": {
+      "noGreek": "No Greek ΣΤ",
+      "noMaths": "No Maths ΣΤ",
+      "tooMany": "More than one ΣΤ period in a subject",
+      "otherSubject": "ΣΤ in another subject",
+      "notFrench": "ΣΤ outside French",
+      "noRoomInFrench": "The ΣΤ do not fit in the French periods",
+      "short": "{n} periods short",
+      "over": "{n} periods over",
+      "noExcusal": "ΑΣΤ/ΕΞΣΤ with no excusal"
+    }
+  },
+  "zoneGrid": {
+    "title": "Zone grid",
+    "description": "Zones are placed first, by hand, and the rest of the program is built around them. Pick a zone on the left and click cells to set its periods; the solver treats them as locked.",
+    "search": "Find a zone…",
+    "placed": "{placed} of {total} zones placed",
+    "clear": "Clear zone",
+    "options": "{n} options",
+    "periods": "{n} per.",
+    "unplaced": "unplaced",
+    "issues": "Grid check",
+    "noIssues": "No conflicts in the grid.",
+    "legend": "Shaded: the selected zone's periods. Click a cell to add or remove one.",
+    "issue": {
+      "unplaced": "{zone}: not placed in the grid",
+      "periods": "{zone}: {slots} periods in the grid, its options have {periods}",
+      "outsideWeek": "{zone}: period {day}/{period} does not exist",
+      "teacher": "{teacher} in two zones at once ({day}/{period}): {zones}",
+      "pupil": "{pupils} pupils in two zones at once ({day}/{period}): {zones}"
+    }
+  }
+}
