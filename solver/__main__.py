@@ -28,7 +28,9 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--seed", type=int, default=0)
     s.add_argument("--no-explain", action="store_true")
     s.add_argument("--room-time", type=float, default=120, help="seconds for the room phase (0 = skip)")
+    s.add_argument("--rooms", choices=["joint", "after"], default="joint", help="joint: rooms inside the time model (needs more memory); after: rooms only once the times are fixed")
     s.add_argument("--hint", default=None, help="a previous timetable JSON to start from")
+    s.add_argument("--ignore-grid", action="store_true", help="ignore the zone grid: the solver places the zones itself")
     r = sub.add_parser("rooms", help="assign rooms to an existing timetable")
     r.add_argument("data")
     r.add_argument("timetable")
@@ -38,11 +40,17 @@ def main(argv: list[str] | None = None) -> int:
     v = sub.add_parser("verify")
     v.add_argument("data")
     v.add_argument("timetable")
+    v.add_argument("--ignore-grid", action="store_true", help="do not require zones to sit on the zone grid")
     c = sub.add_parser("check")
     c.add_argument("data")
     args = ap.parse_args(argv)
 
     school = load(args.data)
+    if getattr(args, "ignore_grid", False):
+        placed = sum(1 for b in school.bands.values() if b.get("slots"))
+        for b in school.bands.values():
+            b["slots"] = []
+        print(f"zone grid ignored: {placed} zones placed by the solver")
     problems = data_problems(school)
     for p in problems:
         print("data:", p)
@@ -98,7 +106,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.hint:
         previous, unmatched = read_hint(Path(args.hint), school)
         print(f"starting from {args.hint}: {len(previous)} periods" + (f", {unmatched} lessons changed since" if unmatched else ""))
-    res = solve(school, time_limit=args.time, workers=args.workers, seed=args.seed, explain=not args.no_explain, previous=previous)
+    res = solve(school, time_limit=args.time, workers=args.workers, seed=args.seed, explain=not args.no_explain, previous=previous, joint_rooms=args.rooms == "joint")
     if res.explanation:
         for e in res.explanation:
             print("explain:", e)
@@ -108,9 +116,11 @@ def main(argv: list[str] | None = None) -> int:
     if not res.placements:
         return 3
     if args.room_time > 0 and school.rooms:
-        rr = assign_rooms(school, res.placements, time_limit=args.room_time, workers=args.workers)
+        rr = assign_rooms(school, res.placements, time_limit=args.room_time, workers=args.workers, hint=res.rooms or None)
         for u in rr.unplaceable:
             print("no candidate room:", u)
+        if not rr.rooms:
+            print(f"room phase {rr.status}: the timetable is written without rooms" + (" — try --rooms joint" if not res.rooms else ""))
         if rr.rooms:
             res.placements = apply_rooms(res.placements, rr.rooms)
             res.penalties = {**res.penalties, "rooms": sum(rr.penalties.values())}

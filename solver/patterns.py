@@ -16,10 +16,23 @@ class Placement:
     day: int
     start: int
     length: int
+    split: int = 0  # > 0: a cross-day block, `split` periods at the end of `day`, the rest from period 1 of day + 1
 
     @property
     def slots(self) -> list[tuple[int, int]]:
+        if self.split:
+            return [(self.day, self.start + i) for i in range(self.split)] + [(self.day + 1, 1 + i) for i in range(self.length - self.split)]
         return [(self.day, self.start + i) for i in range(self.length)]
+
+    @property
+    def days(self) -> set[int]:
+        return {self.day, self.day + 1} if self.split else {self.day}
+
+    def runs(self) -> list[tuple[int, int, int]]:
+        """The (day, start, length) runs this placement occupies."""
+        if self.split:
+            return [(self.day, self.start, self.split), (self.day + 1, 1, self.length - self.split)]
+        return [(self.day, self.start, self.length)]
 
 
 @dataclass
@@ -40,6 +53,7 @@ class Unit:
     long: bool
     band: str | None
     shape: list[int] = field(default_factory=list)  # the declared shape the unit should follow
+    extra: int = 0  # periods in blocks outside the shape (the cross-day block)
     flexible: bool = False  # B1 soft: other splits of the same periods are allowed, at a cost
 
     @property
@@ -48,7 +62,7 @@ class Unit:
 
     @property
     def periods(self) -> int:
-        return sum(self.shape)
+        return sum(self.shape) + self.extra
 
 
 def band_shape(options: list[Lesson]) -> list[int]:
@@ -105,7 +119,7 @@ def build_units(school: School, ignore_locks: bool = False, ignore_unavailable: 
                 unavailable |= school.teachers[t].unavailable if t in school.teachers else set()
         # Fewer available days than blocks (a teacher present one or two days a week):
         # merge the smallest chunks so the lesson still fits on different days.
-        if not fixed:
+        if not fixed and not (unit.lessons[0].cross_day and not unit.band):
             free_days = [d for d in school.days if any((d, p) not in unavailable for p in school.periods(d))]
             if len(shape) > len(free_days) and free_days:
                 merged = fit_shape(shape, len(free_days))
@@ -123,11 +137,28 @@ def build_units(school: School, ignore_locks: bool = False, ignore_unavailable: 
             if fixed:
                 shape = [pl.length for pl in runs(fixed)]
                 unit.shape = list(shape)
+            # A cross-day lesson: the shape's first two chunks are the split — the last `end` periods
+            # of a day, then the first `start` periods of the next ("3+4"). Further chunks as usual.
+            lesson0 = unit.lessons[0]
+            if lesson0.cross_day and not unit.band and sum(shape) >= 2:
+                end, start = lesson0.split
+                rest = sorted(shape[2:], reverse=True) if len(shape) >= 2 else [p for p in [sum(shape) - end - start] if p > 0]
+                cross = Block(unit.id, -1, end + start, required=1)
+                for day in school.days:
+                    if day + 1 not in school.days or end > school.last_period(day) or start > school.last_period(day + 1):
+                        continue
+                    pl = Placement(day, school.last_period(day) - end + 1, end + start, split=end)
+                    if not any(s in unavailable for s in pl.slots):
+                        cross.placements.append(pl)
+                unit.blocks.append(cross)
+                unit.extra = end + start
+                shape = rest
+                unit.shape = list(rest)
             counts = Counter(shape)
             # B1 is soft: a double may become two singles and two singles a double, as the
             # school's own timetable does. Long lessons and locked runs stay whole.
             unit.flexible = school.rule("B1").mode != "HARD" and not unit.long and not fixed
-            lengths = sorted(set(shape) | ({1, min(2, sum(shape))} if unit.flexible else set()))
+            lengths = sorted(set(shape) | ({1, min(2, sum(shape))} if unit.flexible and sum(shape) else set()))
             for length in lengths:
                 block = Block(unit.id, length, length, required=None if unit.flexible else counts[length])
                 for day in school.days:

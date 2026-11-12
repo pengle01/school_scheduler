@@ -146,7 +146,7 @@ def write_xlsx(path: Path, school: School, placements: list[dict], violations: l
 
     # Σύνοψη
     ws = wb.create_sheet("Σύνοψη")
-    ws.append(["Καθηγητής", "Περίοδοι", "Τελευταίες", "Ημέρες με ≥3 συνεχόμενες", "Ημέρες με κενά", "Μέγιστο/ημέρα"])
+    ws.append(["Καθηγητής", "Περίοδοι", "Τελευταίες", "Ημέρες με ≥3 συνεχόμενες", "Ημέρες με κενά", "Μέγιστο/ημέρα", "Αίθουσες"])
     for c in ws[1]:
         c.font = Font(bold=True)
     for t in sorted(school.teachers):
@@ -171,7 +171,8 @@ def write_xlsx(path: Path, school: School, placements: list[dict], violations: l
                 runs3 += 1
             if ps[-1] - ps[0] + 1 > len(ps):
                 gaps += 1
-        ws.append([t, total, last, runs3, gaps, max(len(v) for v in days.values())])
+        rooms_used = {room_of[(l.key, *s)] for l in school.lessons.values() if l.teacher == t for s in slots_of.get(l.key, []) if (l.key, *s) in room_of}
+        ws.append([t, total, last, runs3, gaps, max(len(v) for v in days.values()), len(rooms_used) or ""])
     ws.column_dimensions["A"].width = 28
     ws.freeze_panes = "A2"
 

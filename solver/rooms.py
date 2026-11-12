@@ -4,7 +4,8 @@ Hard: one lesson per room per period; "ONLY" lessons take one of their rooms; a 
 a room type takes a room of that type (unless it lists rooms); a room must hold the lesson's
 pupils when both numbers are known.
 Soft: preferred rooms in their order, the same room for all periods of a lesson, and few
-room changes per teacher per day (rule R3). A lesson flagged `sameRoom` makes the single room
+room changes per teacher per day (rule R3), few different rooms per teacher in the week (R4).
+A lesson flagged `sameRoom` makes the single room
 hard: once a room is chosen from its list, every period of the lesson is held there."""
 
 from __future__ import annotations
@@ -76,7 +77,8 @@ def candidates(school: School, lesson: Lesson) -> tuple[list[str], dict[str, int
     return list(cost), cost
 
 
-def assign_rooms(school: School, placements: list[dict], time_limit: float = 120, workers: int = 8, log=print) -> RoomResult:
+def assign_rooms(school: School, placements: list[dict], time_limit: float = 120, workers: int = 8, log=print, hint: dict[str, str] | None = None) -> RoomResult:
+    """hint: lesson → room to start from (the joint model's choice)."""
     started = time.time()
     if not school.rooms:
         log("no rooms in the data — room phase skipped")
@@ -84,6 +86,7 @@ def assign_rooms(school: School, placements: list[dict], time_limit: float = 120
     cp = cp_model.CpModel()
     blocks = _blocks(placements)
     r3 = school.rule("R3")
+    r4 = school.rule("R4")
     y: dict[tuple[str, int, str], cp_model.IntVar] = {}  # (lesson, block index, room)
     slot_room: dict[tuple[int, int, str], list[cp_model.IntVar]] = defaultdict(list)
     penalties: dict[str, list[tuple[int, cp_model.IntVar | cp_model.LinearExpr]]] = defaultdict(list)
@@ -104,6 +107,8 @@ def assign_rooms(school: School, placements: list[dict], time_limit: float = 120
             for r in rooms:
                 v = cp.NewBoolVar(f"y[{key}][{b}][{r}]")
                 y[(key, b, r)] = v
+                if hint and key in hint:
+                    cp.AddHint(v, 1 if hint[key] == r else 0)
                 vars_.append(v)
                 for s in slots:
                     slot_room[(*s, r)].append(v)
@@ -166,6 +171,26 @@ def assign_rooms(school: School, placements: list[dict], time_limit: float = 120
                 cp.Add(change + sum(same) >= 1)
             penalties["changes"].append((max(1, weight), change))
 
+    # few different rooms per teacher over the week (R4): each room beyond the first costs the weight
+    if r4.mode != "OFF":
+        uses: dict[tuple[str, str], list] = defaultdict(list)  # (teacher, room) → y literals
+        for (key, b, r), v in y.items():
+            lesson = school.lessons.get(key)
+            if lesson and lesson.teacher:
+                uses[(lesson.teacher, r)].append(v)
+        by_teacher: dict[str, list] = defaultdict(list)
+        for (t, r), vs in uses.items():
+            used = cp.NewBoolVar(f"troom[{t}][{r}]")
+            cp.Add(sum(vs) <= len(vs) * used)  # one constraint per teacher and room keeps the model small
+            by_teacher[t].append(used)
+        for t, used in by_teacher.items():
+            mode, weight = r4.for_teacher(t)
+            if mode == "OFF" or len(used) < 2:
+                continue
+            extra = cp.NewIntVar(0, len(used), f"troomExtra[{t}]")
+            cp.Add(extra >= sum(used) - 1)
+            penalties["teacherRooms"].append((max(1, weight), extra))
+
     terms = [w * v for group in penalties.values() for w, v in group]
     if terms:
         cp.Minimize(sum(terms))
@@ -181,7 +206,7 @@ def assign_rooms(school: School, placements: list[dict], time_limit: float = 120
                 for s in blocks[key][b]:
                     res.rooms[(key, *s)] = r
         res.objective = solver.ObjectiveValue()
-        res.penalties = {g: sum(1 for _w, v in items if solver.Value(v)) for g, items in penalties.items()}
+        res.penalties = {g: sum(solver.Value(v) for _w, v in items) for g, items in penalties.items()}
         log(f"rooms {name}: objective {res.objective:.0f}, {res.penalties}, {res.seconds:.0f}s")
     else:
         log(f"rooms {name} after {res.seconds:.0f}s")

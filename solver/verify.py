@@ -7,7 +7,7 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass
 
-from .data import School, impossible_atoms
+from .data import School, impossible_atoms, order_sets, order_violations
 
 
 @dataclass
@@ -53,6 +53,12 @@ def verify(school: School, placements: list[dict]) -> list[Violation]:
             v.append(Violation("B2", f"{l.label}: two blocks on the same day"))
         if not l.band and not l.fixed_slots and chunks != l.shape and school.rule("B1").mode == "HARD":
             v.append(Violation("B1", f"{l.label}: shape {'+'.join(map(str, chunks))} ≠ {'+'.join(map(str, l.shape))}"))
+        if l.cross_day and not l.fixed_slots:
+            have = set(ss)
+            end, start = l.split
+            across = lambda d: all((d, school.last_period(d) - i) in have for i in range(end)) and all((d + 1, 1 + i) in have for i in range(start))  # noqa: E731
+            if not any(across(d) for d in school.days if d + 1 in school.days):
+                v.append(Violation("CROSSDAY", f"{l.label}: no block across days (last {end} + first {start} of the next)"))
         locked = l.fixed_slots or (school.bands.get(l.band, {}).get("slots") if l.band else None)
         if locked and set(ss) != set(locked):
             v.append(Violation("LOCKS", f"{l.label}: not on its locked slots"))
@@ -98,6 +104,19 @@ def verify(school: School, placements: list[dict]) -> list[Violation]:
             host = set(slots_of.get(l.during, []))
             if not set(slots_of.get(l.key, [])) <= host:
                 v.append(Violation("SUPPORT", f"{l.label}: not within its host ({school.lessons[l.during].label})"))
+
+    # O1: period k of a lesson after period k of each lesson entered as earlier
+    o1 = school.rule("O1")
+    if o1.mode != "OFF":
+        for jkey, pkeys in order_sets(school):
+            joint = school.lessons[jkey]
+            mode, _ = o1.for_teacher(joint.teacher)
+            if mode == "OFF":
+                continue
+            for pkey in pkeys:
+                n = order_violations(slots_of.get(jkey, []), slots_of.get(pkey, []))
+                if n:
+                    v.append(Violation("O1", f"{joint.label}: {n} periods before the matching period of {school.lessons[pkey].label}", hard=mode == "HARD"))
 
     # T3 / T4 per teacher
     t3, t4 = school.rule("T3"), school.rule("T4")

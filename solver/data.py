@@ -26,6 +26,8 @@ DEFAULT_RULES: dict[str, dict] = {
     "R1": {"mode": "HARD", "weight": 1, "params": {}},
     "R2": {"mode": "HARD", "weight": 1, "params": {}},
     "R3": {"mode": "SOFT", "weight": 1, "params": {}},
+    "R4": {"mode": "SOFT", "weight": 2, "params": {}},
+    "O1": {"mode": "HARD", "weight": 10, "params": {}},
 }
 
 
@@ -81,6 +83,9 @@ class Lesson:
     room_kind: str | None = None
     rooms: list[str] = field(default_factory=list)  # preferred / allowed room names, in order
     same_room: bool = False  # every period in one room (hard)
+    cross_day: bool = False  # one block across days: the last split[0] periods of a day + the first split[1] of the next
+    split: tuple[int, int] = (1, 1)
+    after: list[str] = field(default_factory=list)  # rule O1: keys of the lessons this one comes after
 
     @property
     def label(self) -> str:
@@ -140,11 +145,20 @@ class School:
         return sum(len(self.pupils_of_group.get(g, ())) for g in lesson.home_groups)
 
 
-def parse_shape(text: str, periods: int) -> list[int]:
+def parse_shape(text: str, periods: int, keep_order: bool = False) -> list[int]:
     parts = [int(x) for x in text.replace(" ", "").split("+") if x]
     if not parts or sum(parts) != periods or any(p < 1 for p in parts):
         return [1] * periods
-    return sorted(parts, reverse=True)
+    return parts if keep_order else sorted(parts, reverse=True)
+
+
+def cross_split(shape: list[int], periods: int) -> tuple[int, int]:
+    """A cross-day lesson's split: periods at the end of a day, then at the start of the next.
+    The written shape gives it ("3+4"); without two chunks, a block of 2 is split 1 + 1."""
+    if len(shape) >= 2:
+        return shape[0], shape[1]
+    n = max(2, min(periods, shape[0] if shape else 2))
+    return (n + 1) // 2, n // 2
 
 
 def fit_shape(shape: list[int], days: int) -> list[int]:
@@ -216,7 +230,9 @@ def load(path: str | Path) -> School:
             home_groups=list(l["homeGroups"]),
             teacher=l.get("teacher"),
             periods=l["periods"],
-            shape=fit_shape(parse_shape(l.get("shape", ""), l["periods"]), len(days_periods)),
+            shape=parse_shape(l.get("shape", ""), l["periods"], keep_order=True)
+            if l.get("crossDay")
+            else fit_shape(parse_shape(l.get("shape", ""), l["periods"]), len(days_periods)),
             audience=l.get("audience", "ALL"),
             students=list(l.get("students") or []),
             during=l.get("during"),
@@ -228,7 +244,10 @@ def load(path: str | Path) -> School:
             room_mode=l.get("roomMode", "ANY"),
             room_kind=l.get("roomKind"),
             same_room=bool(l.get("sameRoom", False)),
+            cross_day=bool(l.get("crossDay", False)),
+            split=cross_split(parse_shape(l.get("shape", ""), l["periods"], keep_order=True), l["periods"]) if l.get("crossDay") else (1, 1),
             rooms=[r for r in (l.get("rooms") or []) if r] or ([l["fixedRoom"]] if l.get("fixedRoom") else []),
+            after=list(l.get("after") or []),
         )
 
     rules: dict[str, Rule] = {}
@@ -332,6 +351,17 @@ def impossible_atoms(school: School) -> dict[int, str]:
     return out
 
 
+def order_sets(school: School) -> list[tuple[str, list[str]]]:
+    """Rule O1: (lesson key, keys of the lessons it comes after), as entered on each lesson."""
+    return sorted((l.key, sorted(k for k in l.after if k in school.lessons and k != l.key)) for l in school.lessons.values() if l.after)
+
+
+def order_violations(joint: list[tuple[int, int]], part: list[tuple[int, int]]) -> int:
+    """Joint periods that do not come after the matching period of the part (k-th after k-th)."""
+    j, p = sorted(joint), sorted(part)
+    return sum(1 for k in range(min(len(j), len(p))) if not p[k] < j[k])
+
+
 def data_problems(school: School) -> list[str]:
     """Things that make the model infeasible before any scheduling: reported, not solved."""
     problems = []
@@ -344,6 +374,9 @@ def data_problems(school: School) -> list[str]:
     for l in school.lessons.values():
         if l.during and l.during not in school.lessons:
             problems.append(f"{l.label}: host {l.during} missing")
+        for k in l.after:
+            if k not in school.lessons or k == l.key:
+                problems.append(f"{l.label}: comes after unknown lesson {k}")
         if l.during and l.periods > school.lessons[l.during].periods:
             problems.append(f"{l.label}: more periods than its host")
         if l.fixed_slots and len(l.fixed_slots) != l.periods:

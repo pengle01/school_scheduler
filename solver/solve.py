@@ -25,6 +25,8 @@ class Result:
     contradictory_atoms: dict[int, list[str]] = field(default_factory=dict)
     # possible lists the solver failed to make clash-free: the timetable is not acceptable
     unresolved_atoms: dict[int, list[str]] = field(default_factory=dict)
+    # joint rooms: lesson → room chosen with the times (a start for the room phase)
+    rooms: dict[str, str] = field(default_factory=dict)
 
 
 class _Progress(cp_model.CpSolverSolutionCallback):
@@ -82,7 +84,7 @@ def hints_from_placements(school: School, placements: list[dict]) -> dict[tuple[
             run = [d, p, 1]
         for b in u.blocks:
             for i, pl in enumerate(b.placements):
-                hints[(u.id, b.index, i)] = 1 if (pl.day, pl.start, pl.length) in placed else 0
+                hints[(u.id, b.index, i)] = 1 if all(r in placed for r in pl.runs()) else 0
     return hints
 
 
@@ -116,13 +118,22 @@ def solve(
     log=print,
     explain: bool = True,
     previous: list[dict] | None = None,
+    joint_rooms: bool = False,
 ) -> Result:
     """Two stages when the pupil rule is hard. Stage 1 looks only for clash-free pupils, up
     to 3/4 of the time. Stage 2 keeps that and improves teachers' days. Clashes are allowed
-    only for provably impossible lists; any other clash left is reported as a failure."""
+    only for provably impossible lists; any other clash left is reported as a failure.
+    joint_rooms: rooms are part of the time model (solver/joint.py) — the times always leave
+    a room for every lesson, and stage 2 weighs room preferences against teachers' days."""
+    from .joint import chosen_rooms, hints_from_rooms, room_hints
+
     started = time.time()
     log(f"building model: {len(school.lessons)} lessons, {len(school.atoms)} atoms, {len(school.teachers)} teachers")
     hints = hints_from_placements(school, previous) if previous else {}
+    rhints = hints_from_rooms(school, previous) if previous and joint_rooms else {}
+    hard_rooms, cost_rooms = ("hard", "costs") if joint_rooms and school.rooms else ("off", "off")
+    if hard_rooms != "off":
+        log(f"  rooms inside the time model: {len(school.rooms)} rooms")
     if previous:
         log(f"  warm start from {len(previous)} placed periods")
     impossible = impossible_atoms(school)
@@ -138,7 +149,7 @@ def solve(
         if school.rule("B1").mode != "HARD":  # shapes come back in stage 2
             quiet.rules["B1"] = type(school.rules["B1"])("B1", "SOFT", 0, {})
         possible = set(school.atoms) - set(impossible)
-        m = build(quiet, soft_atoms=possible, ignore_atoms=set(impossible), hints=hints)
+        m = build(quiet, soft_atoms=possible, ignore_atoms=set(impossible), hints=hints, rooms=hard_rooms, room_hints=rhints)
         log(f"stage 1: clash-free pupils ({len(possible)} groups of pupils, {len(impossible)} impossible lists set aside)")
         solver = _solver(time_limit * 0.75, workers, seed)
         status = solver.Solve(m.cp, _StopAtZero(log))
@@ -147,19 +158,21 @@ def solve(
             log(f"stage 1 {name} after {time.time() - started:.0f}s")
             res = Result(status=name, seconds=time.time() - started)
             if status == cp_model.INFEASIBLE and explain:
-                res.explanation = explain_infeasibility(school, log=log)
+                res.explanation = explain_infeasibility(school, log=log, rooms=hard_rooms)
             return res
         first = extract(m, solver)
         unresolved = _clashing_atoms(school, first, possible)
         log(f"stage 1 done in {time.time() - started:.0f}s: {sum(len(school.atoms[i][1]) for i in unresolved)} pupils still clash")
         hints = hints_from_placements(school, first)
+        if m.z:
+            rhints = room_hints(m, solver)
 
     soft = set(impossible) | unresolved
     school.soft_atoms = set(impossible)
-    m = build(school, soft_atoms=soft, hints=hints)
+    m = build(school, soft_atoms=soft, hints=hints, rooms=cost_rooms, room_hints=rhints)
     for n in dict.fromkeys(school.notes):
         log(f"  note: {n}")
-    log(f"stage 2: teachers' days. {len(m.units)} units, {sum(len(u.blocks) for u in m.units)} blocks, {len(m.x)} placement variables")
+    log(f"stage 2: teachers' days. {len(m.units)} units, {sum(len(u.blocks) for u in m.units)} blocks, {len(m.x)} placement variables" + (f", {len(m.z)} room choices" if m.z else ""))
     solver = _solver(max(60.0, time_limit - (time.time() - started)), workers, seed)
     status = solver.Solve(m.cp, _Progress(log))
     name = solver.StatusName(status)
@@ -167,6 +180,7 @@ def solve(
     res = Result(status=name, seconds=time.time() - started, contradictory_atoms=refs_of(impossible), unresolved_atoms=refs_of(unresolved))
     if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         res.placements = extract(m, solver)
+        res.rooms = chosen_rooms(m, solver)
         res.objective = solver.ObjectiveValue()
         res.bound = solver.BestObjectiveBound()
         res.penalties = {group: sum(1 for _w, v in items if solver.Value(v)) for group, items in m.penalties.items()}
@@ -178,17 +192,19 @@ def solve(
         res.placements = first
         return res
     if status == cp_model.INFEASIBLE and explain:
-        res.explanation = explain_infeasibility(school, log=log)
+        res.explanation = explain_infeasibility(school, log=log, rooms=hard_rooms)
     return res
 
 
-def explain_infeasibility(school: School, probe_seconds: float = 60, workers: int = 8, log=print) -> list[str]:
+def explain_infeasibility(school: School, probe_seconds: float = 60, workers: int = 8, log=print, rooms: str = "off") -> list[str]:
     """Relax one hard group at a time; report which relaxations make the model feasible."""
     findings = []
     log("looking for the conflicting rules …")
     for code in RELAXABLE:
+        if code == "ROOMS" and rooms == "off":
+            continue
         try:
-            m = build(school, relax={code})
+            m = build(school, relax={code}, rooms=rooms)
         except ValueError as e:
             findings.append(f"relaxing {code}: cannot build ({e})")
             continue

@@ -203,6 +203,64 @@ def test_hint_is_matched_by_content_not_by_key(tmp_path):
     assert sorted((p["day"], p["period"]) for p in placements if p["lesson"] == "L02") == old
 
 
+def test_cross_day_lesson_runs_last_period_then_first_of_next_day(tmp_path):
+    path = mini_school(tmp_path)
+    doc = json.loads(path.read_text(encoding="utf-8"))
+    for l in doc["lessons"]:
+        if l["key"] == "L02":  # Greek 4 periods, 2+1+1
+            l["crossDay"] = True
+    path.write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
+    s = load(path)
+    unit = {u.id: u for u in build_units(s)}["L02"]
+    cross = [b for b in unit.blocks if b.index == -1]
+    # written "2+1+1": the last 2 periods of a day, period 1 of the next, then one more single
+    assert len(cross) == 1 and unit.periods == 4 and unit.shape == [1]
+    assert all(pl.slots == [(pl.day, s.last_period(pl.day) - 1), (pl.day, s.last_period(pl.day)), (pl.day + 1, 1)] for pl in cross[0].placements)
+    res = solve(s, time_limit=20, workers=4, log=lambda *_: None, explain=False)
+    assert res.status in ("OPTIMAL", "FEASIBLE")
+    slots = {(p["day"], p["period"]) for p in res.placements if p["lesson"] == "L02"}
+    assert len(slots) == 4
+    assert any({(d, s.last_period(d) - 1), (d, s.last_period(d)), (d + 1, 1)} <= slots for d in s.days if d + 1 in s.days)
+    assert [v for v in verify(s, res.placements) if v.hard] == []
+    # the verifier catches a cross-day lesson that is not across days
+    moved = [p for p in res.placements if p["lesson"] != "L02"] + [{"lesson": "L02", "day": 2, "period": n} for n in (2, 3, 4, 5)]
+    assert any(v.code == "CROSSDAY" for v in verify(s, moved))
+
+
+def test_cross_day_split_follows_the_written_shape(tmp_path):
+    path = mini_school(tmp_path)
+    doc = json.loads(path.read_text(encoding="utf-8"))
+    for l in doc["lessons"]:
+        if l["key"] == "L02":  # Greek 4 periods written "1+2+1": last 1 of a day, first 2 of the next, then a single
+            l["crossDay"], l["shape"] = True, "1+2+1"
+    path.write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
+    s = load(path)
+    assert s.lessons["L02"].split == (1, 2)
+    unit = {u.id: u for u in build_units(s)}["L02"]
+    cross = next(b for b in unit.blocks if b.index == -1)
+    assert cross.length == 3 and unit.shape == [1] and unit.periods == 4
+    assert all(pl.slots == [(pl.day, s.last_period(pl.day)), (pl.day + 1, 1), (pl.day + 1, 2)] for pl in cross.placements)
+    res = solve(s, time_limit=20, workers=4, log=lambda *_: None, explain=False)
+    slots = {(p["day"], p["period"]) for p in res.placements if p["lesson"] == "L02"}
+    assert len(slots) == 4
+    assert any((d, s.last_period(d)) in slots and {(d + 1, 1), (d + 1, 2)} <= slots for d in s.days if d + 1 in s.days)
+    assert [v for v in verify(s, res.placements) if v.hard] == []
+
+
+def test_zone_grid_locks_the_band_and_can_be_ignored(tmp_path):
+    path = mini_school(tmp_path)
+    doc = json.loads(path.read_text(encoding="utf-8"))
+    doc["bands"][0]["fixedSlots"] = [{"day": 2, "periods": [5, 6]}]
+    path.write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
+    s = load(path)
+    band = {u.id: u for u in build_units(s)}["band:ΑΠ1ΕΠΙΛ"]
+    assert [pl.slots for b in band.blocks for pl in b.placements] == [[(2, 5), (2, 6)]]
+    for b in s.bands.values():  # what --ignore-grid does
+        b["slots"] = []
+    band = {u.id: u for u in build_units(s)}["band:ΑΠ1ΕΠΙΛ"]
+    assert sum(len(b.placements) for b in band.blocks) > 1
+
+
 def test_build_rejects_block_without_placement(tmp_path):
     s = load(mini_school(tmp_path))
     # teacher Γ never available → French has nowhere to go
