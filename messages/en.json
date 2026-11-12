@@ -50,6 +50,8 @@
     "hasSupport": "This lesson has support lessons that depend on it.",
     "generic": "Something went wrong.",
     "roomsRequired": "\"Only these rooms\" needs at least one room.",
+    "orderSelf": "A lesson cannot come after itself.",
+    "orderLoop": "The order makes a loop (A after B after A) — the timetable would be impossible.",
     "badTimetable": "The file is not a solver result (timetable JSON).",
     "timetableMismatch": "Some lessons of the file no longer exist (or changed) in the database. Export again, solve again and load the new result.",
     "timetableNoLessons": "The file carries no lesson list (older solver output). Load it with npm run import:timetable or solve again.",
@@ -304,7 +306,10 @@
     "deleteText": "This cannot be undone.",
     "deleteWithSupport": "The {n} support lessons that run during it will be deleted too.",
     "cancel": "Cancel",
-    "sameRoom": "Same room for every period"
+    "sameRoom": "Same room for every period",
+    "crossDay": "Across days: last period + 1st of the next day",
+    "orderAfter": "Comes after {n, plural, one {# lesson} other {# lessons}} (rule O1)",
+    "orderBefore": "{n, plural, one {# lesson comes} other {# lessons come}} after this one (rule O1)"
   },
   "lessonForm": {
     "newTitle": "New lesson",
@@ -332,6 +337,11 @@
     "audienceSubset": "Specific pupils",
     "pickGroupsFirst": "Pick a home group first.",
     "fixedSlots": "Locked periods",
+    "after": "Comes after (rule O1)",
+    "afterHint": "E.g. Physics ΘΗΨ2α+ΘΗΨ2β after ΘΗΨ2α and ΘΗΨ2β: each period of this lesson in the week comes after one period of every chosen lesson (α, β, joint, α, β, joint…). Periods left over go anywhere after.",
+    "afterNoTeacher": "Choose a teacher first: their other lessons are listed.",
+    "afterNone": "The teacher has no other lessons.",
+    "afterSubset": "part of a group",
     "fixedSlotsHint": "day:periods, e.g. 1:1-7 (Monday 1st–7th), 3:2-7. Empty = left to the solver.",
     "badFixedSlots": "Locked periods are written as day:from-to, e.g. 1:1-7, 3:2-7.",
     "note": "Note",
@@ -340,10 +350,15 @@
     "roomMode": "Room",
     "roomKind": "Room type",
     "anyKind": "— any —",
-    "roomList": "Rooms (click in order of preference)",
+    "roomList": "Rooms (click in order of preference, or type them below)",
     "roomHint": "Prefer: the solver tries the rooms in the order you picked. Only: exclusively the chosen rooms. \"Same room\": once a room from the list is chosen, every period of the lesson is held there (hard rule).",
     "excusedHint": "ΑΣΤ and ΕΞΣΤ have no host lesson: on the Support page you set which lessons each pupil is excused from.",
-    "sameRoom": "Same room for every period"
+    "sameRoom": "Same room for every period",
+    "roomTextPlaceholder": "Type or paste in order of preference, e.g. 121, 33, 32 or 121/33/32",
+    "roomTextUnknown": "Unknown rooms (ignored): {names}",
+    "crossDay": "Across days (last + 1st)",
+    "crossDayHint": "The shape gives the split: the 1st number = last periods of a day, the 2nd = first periods of the next, the rest are placed as usual. E.g. 3+4: last 3, then 1st–4th the next day.",
+    "crossDaySplit": "Last {end} periods of a day → periods 1–{start} of the next"
   },
   "bands": {
     "title": "Bands",
@@ -477,6 +492,14 @@
     "R3": {
       "name": "Room changes",
       "description": "Minimise room changes per teacher per day."
+    },
+    "R4": {
+      "name": "Rooms per teacher",
+      "description": "As few different rooms as possible for each teacher over the week. The weight counts every room beyond the first."
+    },
+    "O1": {
+      "name": "Lesson order",
+      "description": "A lesson with \"Comes after\" (e.g. Physics ΘΗΨ2α+ΘΗΨ2β after ΘΗΨ2α and ΘΗΨ2β): each of its periods in the week comes after one period of every chosen lesson — α, β, joint, α, β, joint… Set in the lesson form. Soft: every period out of order costs the weight."
     }
   },
   "settings": {

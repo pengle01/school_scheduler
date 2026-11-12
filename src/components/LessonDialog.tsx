@@ -11,8 +11,9 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { StudentPicker } from "@/components/StudentPicker";
 import { useErrorToast } from "@/components/useErrorToast";
-import { normaliseShape, defaultShape } from "@/lib/shape";
+import { normaliseShape, defaultShape, crossDaySplit } from "@/lib/shape";
 import { parseFixedSlots, formatFixedSlots } from "@/lib/fixedSlots";
+import { parseRoomList, formatRoomList } from "@/lib/roomList";
 import { cn } from "@/lib/utils";
 
 type Lesson = RouterOutputs["lessons"]["list"][number];
@@ -60,11 +61,13 @@ export function LessonDialog({ open, onClose, onSaved, lesson, defaults, lockStr
         supportKind: (lesson.supportKind ?? "ST") as SupportKind,
         bandId: lesson.bandId ?? "",
         long: lesson.long,
+        crossDay: lesson.crossDay,
         roomMode: lesson.roomMode as "ANY" | "PREFER" | "ONLY",
         roomKind: lesson.roomKind ?? "",
         sameRoom: lesson.sameRoom,
         roomIds: lesson.rooms.map((r) => r.roomId),
         fixedSlots: formatFixedSlots(lesson.fixedSlots as { day: number; periods: number[] }[] | null),
+        afterIds: lesson.after.map((a) => a.afterId),
         note: lesson.note ?? "",
       };
     }
@@ -81,26 +84,33 @@ export function LessonDialog({ open, onClose, onSaved, lesson, defaults, lockStr
       supportKind: defaults?.supportKind ?? ("ST" as SupportKind),
       bandId: defaults?.bandId ?? "",
       long: false,
+      crossDay: false,
       roomMode: "ANY" as "ANY" | "PREFER" | "ONLY",
       roomKind: "",
       sameRoom: false,
       roomIds: [] as string[],
       fixedSlots: "",
+      afterIds: [] as string[],
       note: "",
     };
   }, [lesson, defaults]);
 
   const [form, setForm] = useState(initial);
   const [synced, setSynced] = useState(initial);
+  // Room list as typed text; null = show the chips' order. Reset with the form.
+  const [roomText, setRoomText] = useState<string | null>(null);
   if (initial !== synced) {
     setSynced(initial);
     setForm(initial);
+    setRoomText(null);
   }
   const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) => setForm((f) => ({ ...f, [k]: v }));
 
   const hosts = trpc.lessons.hostCandidates.useQuery({ homeGroupIds: form.homeGroupIds }, { enabled: open && form.structure === "SUPPORT" && form.homeGroupIds.length > 0 });
   const host = hosts.data?.find((h) => h.id === form.hostLessonId);
   const hostPupils = new Set(host?.audience === "SUBSET" ? host.students.map((s) => s.studentId) : []);
+  // Rule O1: the lessons of the same teacher this lesson can come after
+  const orderCandidates = trpc.lessons.orderCandidates.useQuery({ teacherId: form.teacherId, excludeId: lesson?.id }, { enabled: open && !!form.teacherId });
 
   const invalidateAll = () => Promise.all([utils.lessons.invalidate(), utils.homeGroups.invalidate(), utils.bands.invalidate(), utils.teachers.list.invalidate(), utils.stats.invalidate()]);
   const create = trpc.lessons.create.useMutation({ onError: toastError });
@@ -112,7 +122,8 @@ export function LessonDialog({ open, onClose, onSaved, lesson, defaults, lockStr
   const pupils = (students.data ?? [])
     .filter((s) => s.homeGroupId && hgSet.has(s.homeGroupId))
     .map((s) => ({ id: s.id, name: s.name, homeGroupId: s.homeGroupId, homeGroupName: s.homeGroup?.name }));
-  const shapeOk = form.shape.trim() === "" || normaliseShape(form.shape, form.periods) !== null;
+  const shapeOk = form.shape.trim() === "" || normaliseShape(form.shape, form.periods, form.crossDay) !== null;
+  const split = form.crossDay && form.periods >= 2 ? crossDaySplit(form.shape, form.periods) : null;
   const canSave =
     form.homeGroupIds.length > 0 &&
     form.subjectId &&
@@ -140,11 +151,15 @@ export function LessonDialog({ open, onClose, onSaved, lesson, defaults, lockStr
       supportKind: form.structure === "SUPPORT" ? form.supportKind : null,
       bandId: form.structure === "BAND" ? form.bandId : null,
       long: form.long,
+      crossDay: form.crossDay && form.periods >= 2,
       roomMode: form.roomMode,
       roomKind: form.roomKind || null,
       sameRoom: form.sameRoom,
       roomIds: form.roomMode === "ANY" ? [] : form.roomIds,
       fixedSlots: fixed,
+      // links to lessons of another teacher are dropped when the teacher changes;
+      // while the list is still loading the links are left as they are
+      afterIds: !form.teacherId ? [] : orderCandidates.data ? form.afterIds.filter((a) => orderCandidates.data.some((c) => c.id === a)) : lesson ? undefined : form.afterIds,
       note: form.note.trim() || null,
     };
     try {
@@ -240,6 +255,10 @@ export function LessonDialog({ open, onClose, onSaved, lesson, defaults, lockStr
               <label className="flex items-end gap-2 pb-2 text-sm">
                 <input type="checkbox" className="accent-emerald-600" checked={form.long} onChange={(e) => set("long", e.target.checked)} /> {t("long")}
               </label>
+              <label className="flex items-end gap-2 pb-2 text-sm" title={t("crossDayHint")}>
+                <input type="checkbox" className="accent-emerald-600" checked={form.crossDay} disabled={form.periods < 2} onChange={(e) => set("crossDay", e.target.checked)} /> {t("crossDay")}
+              </label>
+                {split && <p className="text-xs text-indigo-700 pb-2">{t("crossDaySplit", { end: split[0], start: split[1] })}</p>}
             </div>
 
             {/* Rooms */}
@@ -276,7 +295,10 @@ export function LessonDialog({ open, onClose, onSaved, lesson, defaults, lockStr
                           key={r.id}
                           type="button"
                           title={[r.kind, r.capacity ? `${r.capacity} θ.` : ""].filter(Boolean).join(" · ")}
-                          onClick={() => set("roomIds", idx >= 0 ? form.roomIds.filter((x) => x !== r.id) : [...form.roomIds, r.id])}
+                          onClick={() => {
+                            set("roomIds", idx >= 0 ? form.roomIds.filter((x) => x !== r.id) : [...form.roomIds, r.id]);
+                            setRoomText(null);
+                          }}
                           className={cn("px-2 py-0.5 rounded-full text-xs border", idx >= 0 ? "bg-emerald-600 text-white border-emerald-600" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50")}
                         >
                           {idx >= 0 && <span className="opacity-70 mr-1">{idx + 1}.</span>}
@@ -285,6 +307,21 @@ export function LessonDialog({ open, onClose, onSaved, lesson, defaults, lockStr
                       );
                     })}
                   </div>
+                  <Input
+                    className="mt-2 h-8 text-sm"
+                    placeholder={t("roomTextPlaceholder")}
+                    value={roomText ?? formatRoomList(form.roomIds, roomOptions.data?.rooms ?? [])}
+                    onChange={(e) => {
+                      setRoomText(e.target.value);
+                      set("roomIds", parseRoomList(e.target.value, roomOptions.data?.rooms ?? []).ids);
+                    }}
+                    onBlur={() => setRoomText(null)}
+                  />
+                  {roomText !== null && parseRoomList(roomText, roomOptions.data?.rooms ?? []).unknown.length > 0 && (
+                    <p className="text-xs text-red-700 mt-1">
+                      {t("roomTextUnknown", { names: parseRoomList(roomText, roomOptions.data?.rooms ?? []).unknown.join(", ") })}
+                    </p>
+                  )}
                 </div>
               )}
               <label className="flex items-center gap-2 text-sm">
@@ -351,6 +388,33 @@ export function LessonDialog({ open, onClose, onSaved, lesson, defaults, lockStr
                   )}
                 </div>
               )}
+            </div>
+
+            {/* Rule O1: this lesson's k-th period after the k-th period of each chosen lesson */}
+            <div>
+              <Label>{t("after")}</Label>
+              {!form.teacherId ? (
+                <p className="text-xs text-slate-500 mt-1">{t("afterNoTeacher")}</p>
+              ) : (orderCandidates.data ?? []).length === 0 ? (
+                <p className="text-xs text-slate-500 mt-1">{t("afterNone")}</p>
+              ) : (
+                <div className="mt-1 grid sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-1 max-h-40 overflow-y-auto rounded-md border border-slate-200 p-2">
+                  {(orderCandidates.data ?? []).map((c) => (
+                    <label key={c.id} className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        className="accent-emerald-600"
+                        checked={form.afterIds.includes(c.id)}
+                        onChange={(e) => set("afterIds", e.target.checked ? [...form.afterIds, c.id] : form.afterIds.filter((x) => x !== c.id))}
+                      />
+                      <span>
+                        {c.homeGroups.map((h) => h.homeGroup.name).sort().join("+")} · {c.subject.name} ({c.periods}){c.audience === "SUBSET" ? ` · ${t("afterSubset")}` : ""}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              )}
+              <p className="text-xs text-slate-500 mt-1">{t("afterHint")}</p>
             </div>
 
             <div className="grid md:grid-cols-2 gap-3">

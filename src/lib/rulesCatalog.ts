@@ -29,6 +29,8 @@ export const RULES: RuleSpec[] = [
   { code: "R1", mode: "HARD", weight: 1, params: {}, perTeacher: false }, // one lesson per room per period
   { code: "R2", mode: "HARD", weight: 1, params: {}, perTeacher: false }, // room of the required type
   { code: "R3", mode: "SOFT", weight: 1, params: {}, perTeacher: false }, // minimise room changes per teacher per day
+  { code: "R4", mode: "SOFT", weight: 2, params: {}, perTeacher: true }, // minimise the number of different rooms a teacher uses in the week
+  { code: "O1", mode: "HARD", weight: 10, params: {}, perTeacher: true }, // a lesson comes after the lessons entered on it (Lesson.after): its period k after period k of each
 ];
 
 export const RULE_CODES = RULES.map((r) => r.code);

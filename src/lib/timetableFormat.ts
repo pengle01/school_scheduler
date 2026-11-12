@@ -73,23 +73,51 @@ export function summaryOf(file: TimetableFile, problems: string[]): TimetableSum
   };
 }
 
+export type TeacherChange = { key: string; lessonId: string; subject: string; homeGroups: string[]; from: string | null; to: string | null };
+
 /** Key → lesson id by matching identities. Several lessons may share one identity (true
- *  duplicates); they are paired in order. Keys without a match are reported. */
-export function keysByIdentity(fileLessons: Record<string, LessonIdentity>, dbLessons: { id: string; identity: LessonIdentity }[]): { keyOf: Map<string, string>; unmatched: string[] } {
+ *  duplicates); they are paired in order. A lesson whose teacher was changed after the solve
+ *  (everything else equal) is still matched and reported in `teacherChanged`. Keys without a
+ *  match are reported in `unmatched`. */
+export function keysByIdentity(
+  fileLessons: Record<string, LessonIdentity>,
+  dbLessons: { id: string; identity: LessonIdentity }[],
+): { keyOf: Map<string, string>; unmatched: string[]; teacherChanged: TeacherChange[] } {
   const pool = new Map<string, string[]>();
   for (const l of dbLessons) {
     const k = identityKey(l.identity);
     pool.set(k, [...(pool.get(k) ?? []), l.id]);
   }
   const keyOf = new Map<string, string>();
-  const unmatched: string[] = [];
+  const missing: string[] = [];
   for (const key of Object.keys(fileLessons).sort()) {
     const ids = pool.get(identityKey(fileLessons[key]));
     const id = ids?.shift();
     if (id) keyOf.set(key, id);
-    else unmatched.push(key);
+    else missing.push(key);
   }
-  return { keyOf, unmatched };
+  // second pass: the same lesson with another teacher, among the lessons nobody matched
+  const used = new Set(keyOf.values());
+  const noTeacher = (i: LessonIdentity) => identityKey({ ...i, teacher: null });
+  const loose = new Map<string, { id: string; identity: LessonIdentity }[]>();
+  for (const l of dbLessons) {
+    if (used.has(l.id)) continue;
+    const k = noTeacher(l.identity);
+    loose.set(k, [...(loose.get(k) ?? []), l]);
+  }
+  const unmatched: string[] = [];
+  const teacherChanged: TeacherChange[] = [];
+  for (const key of missing) {
+    const f = fileLessons[key];
+    const l = loose.get(noTeacher(f))?.shift();
+    if (!l) {
+      unmatched.push(key);
+      continue;
+    }
+    keyOf.set(key, l.id);
+    teacherChanged.push({ key, lessonId: l.id, subject: f.subject, homeGroups: f.homeGroups, from: f.teacher, to: l.identity.teacher });
+  }
+  return { keyOf, unmatched, teacherChanged };
 }
 
 export type ResolvedPlacement = { lessonId: string; day: number; period: number; room: string | null };

@@ -101,10 +101,17 @@ export function LessonTable({
                   ))}
                 </td>
               )}
-              <td className="py-1 pr-2">{l.subject.name}</td>
+              <td className="py-1 pr-2">
+                {l.subject.name}
+                {l.after.length > 0 && <span className="ml-1 rounded bg-violet-50 border border-violet-200 px-1 text-xs text-violet-800" title={t("orderAfter", { n: l.after.length })}>↻{l.after.length}</span>}
+                {l._count.followers > 0 && <span className="ml-1 rounded bg-violet-50 border border-violet-200 px-1 text-xs text-violet-800" title={t("orderBefore", { n: l._count.followers })}>→</span>}
+              </td>
               <td className={cn("py-1 pr-2", !l.teacherId && "text-amber-700 italic")}>{l.teacher?.name ?? t("vacancy")}</td>
               <td className="py-1 pr-2 text-right">{l.periods}</td>
-              <td className="py-1 pr-2 text-slate-500">{l.shape}</td>
+              <td className="py-1 pr-2 text-slate-500">
+                {l.shape}
+                {l.crossDay && <span className="ml-1 rounded bg-indigo-50 border border-indigo-200 px-1 text-xs text-indigo-800" title={t("crossDay")}>↷</span>}
+              </td>
               <td className="py-1 pr-2 text-right text-slate-500">{l.audience === "SUBSET" ? l.students.length : t("all")}</td>
               {showStructure && <td className="py-1 pr-2"><StructureBadge lesson={l} /></td>}
               {!compact && (

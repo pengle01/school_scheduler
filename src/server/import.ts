@@ -120,6 +120,7 @@ export async function applyImport(db: PrismaClient, file: ExportFile, mode: Impo
             supportKind: l.supportKind,
             bandId: l.band ? bandId.get(l.band) ?? null : null,
             long: l.long,
+            crossDay: l.crossDay,
             fixedRoom: l.fixedRoom,
             roomMode: l.roomMode,
             roomKind: l.roomKind,
@@ -138,6 +139,8 @@ export async function applyImport(db: PrismaClient, file: ExportFile, mode: Impo
           l.audience === "SUBSET" && l.students ? l.students.filter((s) => studentId.has(s)).map((s) => ({ lessonId: lessonId.get(l.key)!, studentId: studentId.get(s)! })) : [],
         );
         if (pupilRows.length) await tx.lessonStudent.createMany({ data: pupilRows, skipDuplicates: true });
+        const orderRows = file.lessons.flatMap((l) => l.after.filter((k) => lessonId.has(k) && k !== l.key).map((k) => ({ lessonId: lessonId.get(l.key)!, afterId: lessonId.get(k)! })));
+        if (orderRows.length) await tx.lessonOrder.createMany({ data: orderRows, skipDuplicates: true });
         const excusalRows = file.students.flatMap((s) =>
           studentId.has(studentRef(s)) ? s.excusedFrom.filter((k) => lessonId.has(k)).map((k) => ({ studentId: studentId.get(studentRef(s))!, lessonId: lessonId.get(k)! })) : [],
         );

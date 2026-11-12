@@ -94,6 +94,12 @@ describe("keysByIdentity", () => {
     expect(new Set([r.keyOf.get("L0001"), r.keyOf.get("L0003")])).toEqual(new Set(["a1", "a2"]));
     expect(r.unmatched).toEqual(["L0009"]);
   });
+  it("matches a lesson whose teacher changed after the solve and reports it", () => {
+    const r = keysByIdentity({ L1: id({ teacher: "Γ" }), L2: id({ subject: "Φυσική" }) }, [{ id: "x", identity: id({ teacher: "Ν" }) }]);
+    expect(r.keyOf.get("L1")).toBe("x");
+    expect(r.teacherChanged).toEqual([{ key: "L1", lessonId: "x", subject: "Μαθηματικά", homeGroups: ["ΗΥ1"], from: "Γ", to: "Ν" }]);
+    expect(r.unmatched).toEqual(["L2"]);
+  });
   it("tells two identical parts apart by the pupils excused from them", () => {
     const part1 = id({ excused: ["p9"] });
     const part2 = id({ excused: [] });

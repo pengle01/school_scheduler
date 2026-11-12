@@ -10,7 +10,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { basename, resolve } from "node:path";
 import { PrismaClient } from "@/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { ImportError, parseExportFile } from "@/server/import";
+import { parseExportFile } from "@/server/import";
 import { identitiesOfExport, importTimetable, parseTimetableFile } from "@/server/timetable";
 
 const [fileArg, nameArg] = process.argv.slice(2);
@@ -34,13 +34,17 @@ const db = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.
 try {
   const r = await importTimetable(db, nameArg ?? basename(fileArg, ".json"), file, identities);
   console.log(`timetable ${r.id}: ${r.placements} placements`);
-  if (r.problems.length) console.log(`${r.problems.length} lessons with a different number of periods than placed (lessons edited since the solve?)`);
+  for (const c of r.teacherChanged) console.log(`teacher changed since the solve: ${c.subject} ${c.homeGroups.join("+")}: ${c.from ?? "—"} → ${c.to ?? "—"} (check the new teacher for clashes)`);
+  const other = r.problems.length - r.teacherChanged.length;
+  if (other) console.log(`${other} lessons with a different number of periods than placed (lessons edited since the solve?)`);
 } catch (e) {
-  if (e instanceof ImportError && e.key === "timetableMismatch") {
+  // tsx may load the module twice, so compare the key rather than the class
+  const key = e instanceof Error ? (e as Error & { key?: string }).key : undefined;
+  if (key === "timetableMismatch") {
     console.error("some lessons of the file no longer exist in the database — re-export, re-solve, then import");
     process.exit(1);
   }
-  if (e instanceof ImportError && e.key === "timetableNoLessons") {
+  if (key === "timetableNoLessons") {
     console.error("the timetable carries no lesson list and no source file — re-run the solver to get one");
     process.exit(1);
   }

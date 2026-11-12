@@ -193,6 +193,18 @@ model Room {
 }
 
 // Preferred / allowed rooms of a lesson, in order of preference (rank 0 first)
+// Rule O1: `lesson` comes after `after` — its k-th period in the week after the k-th period of
+// `after` (e.g. Physics ΘΗΨ2α+ΘΗΨ2β after ΘΗΨ2α and after ΘΗΨ2β).
+model LessonOrder {
+  lessonId String
+  lesson   Lesson @relation("OrderLater", fields: [lessonId], references: [id], onDelete: Cascade)
+  afterId  String
+  after    Lesson @relation("OrderEarlier", fields: [afterId], references: [id], onDelete: Cascade)
+
+  @@id([lessonId, afterId])
+  @@index([afterId])
+}
+
 model LessonRoom {
   lessonId String
   lesson   Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
@@ -230,6 +242,7 @@ model Lesson {
   shape     String
   // Long lesson (full-day workshop): exempt from the daily/consecutive limits
   long      Boolean  @default(false)
+  crossDay  Boolean  @default(false) // one block of 2 = last period of a day + first period of the next
   // Legacy free-text room (kept for old data); rooms are now in LessonRoom + roomMode/roomKind
   fixedRoom String?
   roomMode  RoomMode @default(ANY)
@@ -238,6 +251,8 @@ model Lesson {
   rooms     LessonRoom[]
   placements Placement[]
   excusals StudentExcusal[]
+  after     LessonOrder[] @relation("OrderLater")   // lessons this one follows (rule O1)
+  followers LessonOrder[] @relation("OrderEarlier")
   // Pre-assigned placement, e.g. [{"day":1,"periods":[1,2,3,4,5,6,7]}] for the hotel workshops
   fixedSlots Json?
   note      String?

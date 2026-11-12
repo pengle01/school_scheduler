@@ -18,9 +18,9 @@ const fixture: ExportFile = {
   bands: [{ name: "ΑΠ1ΕΠΙΛ", kind: "ELECTIVE", note: null, fixedSlots: null }],
   rooms: [],
   lessons: [
-    { key: "L0001", subject: "Μαθηματικά", level: "A", homeGroups: ["ΗΥ1"], teacher: "Μ-ΔΟΚΙΜΗ Α.", periods: 3, shape: "1+1+1", audience: "ALL", students: null, during: null, supportKind: null, band: null, long: false, fixedRoom: null, roomMode: "ANY", roomKind: null, sameRoom: false, rooms: [], fixedSlots: null, note: null },
-    { key: "L0002", subject: "Φυσική", level: "A", homeGroups: ["ΗΥ1", "ΜΟ1"], teacher: "Χ", periods: 2, shape: "2", audience: "SUBSET", students: ["1", "99"], during: "L0001", supportKind: "ST", band: "ΑΠ2ΕΠΙΛ", long: false, fixedRoom: null, roomMode: "ANY", roomKind: null, sameRoom: false, rooms: [], fixedSlots: null, note: null },
-    { key: "L0003", subject: "Μαθηματικά", level: "A", homeGroups: ["ΗΥ1"], teacher: null, periods: 1, shape: "1", audience: "ALL", students: null, during: "L0099", supportKind: null, band: null, long: false, fixedRoom: null, roomMode: "ANY", roomKind: null, sameRoom: false, rooms: [], fixedSlots: null, note: null },
+    { key: "L0001", subject: "Μαθηματικά", level: "A", homeGroups: ["ΗΥ1"], teacher: "Μ-ΔΟΚΙΜΗ Α.", periods: 3, shape: "1+1+1", audience: "ALL", students: null, during: null, supportKind: null, band: null, long: false, crossDay: false, fixedRoom: null, roomMode: "ANY", roomKind: null, sameRoom: false, rooms: [], fixedSlots: null, after: [], note: null },
+    { key: "L0002", subject: "Φυσική", level: "A", homeGroups: ["ΗΥ1", "ΜΟ1"], teacher: "Χ", periods: 2, shape: "2", audience: "SUBSET", students: ["1", "99"], during: "L0001", supportKind: "ST", band: "ΑΠ2ΕΠΙΛ", long: false, crossDay: false, fixedRoom: null, roomMode: "ANY", roomKind: null, sameRoom: false, rooms: [], fixedSlots: null, after: [], note: null },
+    { key: "L0003", subject: "Μαθηματικά", level: "A", homeGroups: ["ΗΥ1"], teacher: null, periods: 1, shape: "1", audience: "ALL", students: null, during: "L0099", supportKind: null, band: null, long: false, crossDay: false, fixedRoom: null, roomMode: "ANY", roomKind: null, sameRoom: false, rooms: [], fixedSlots: null, after: [], note: null },
   ],
   rules: [{ code: "T2", mode: "SOFT", weight: 3, params: { max: 2 }, overrides: [{ teacher: "Μ-ΔΟΚΙΜΗ Α.", mode: "HARD", weight: 1 }] }],
 };
@@ -61,6 +61,20 @@ describe("danglingReferences", () => {
     expect(problems).toContain("lessons[1]: both during and band");
     expect(problems).toContain("lessons[2].during=L0099");
     expect(problems).not.toContain("lessons[0].homeGroups=ΗΥ1");
+  });
+
+  it("checks rule O1 links: known keys, never the lesson itself", () => {
+    const file = ExportV2Schema.parse({ ...fixture, lessons: fixture.lessons.map((l, i) => (i === 0 ? { ...l, after: ["L0003", "L0001", "L0077"] } : l)) });
+    const problems = danglingReferences(file);
+    expect(problems).toContain("lessons[0].after=L0001");
+    expect(problems).toContain("lessons[0].after=L0077");
+    expect(problems).not.toContain("lessons[0].after=L0003");
+  });
+
+  it("reads files written before O1 links existed", () => {
+    const { after: _after, ...old } = fixture.lessons[0];
+    const file = ExportV2Schema.parse({ ...fixture, lessons: [old] });
+    expect(file.lessons[0].after).toEqual([]);
   });
 
   it("keys subjects by name and level, pupils by externalId else name", () => {

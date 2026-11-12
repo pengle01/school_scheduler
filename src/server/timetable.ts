@@ -2,7 +2,7 @@
 // scripts/import-timetable.mts.
 
 import type { PrismaClient } from "@/generated/prisma/client";
-import { TimetableFileSchema, keysByIdentity, resolvePlacements, summaryOf, type LessonIdentity, type TimetableFile } from "@/lib/timetableFormat";
+import { TimetableFileSchema, keysByIdentity, resolvePlacements, summaryOf, type LessonIdentity, type TeacherChange, type TimetableFile } from "@/lib/timetableFormat";
 import { studentRef, type ExportFile } from "@/lib/exportFormat";
 import { ImportError } from "@/server/import";
 
@@ -65,13 +65,16 @@ export async function importTimetable(
   name: string,
   file: TimetableFile,
   identities: Record<string, LessonIdentity> | undefined = file.lessons,
-): Promise<{ id: string; placements: number; problems: string[] }> {
+): Promise<{ id: string; placements: number; problems: string[]; teacherChanged: TeacherChange[] }> {
   if (!identities) throw new ImportError("timetableNoLessons");
   const dbLessons = await dbIdentities(db);
-  const { keyOf, unmatched } = keysByIdentity(identities, dbLessons);
+  const { keyOf, unmatched, teacherChanged } = keysByIdentity(identities, dbLessons);
   if (unmatched.length) throw new ImportError("timetableMismatch");
   const periodsOf = new Map(dbLessons.map((l) => [l.id, l.periods]));
-  const { placements, unknownKeys, problems } = resolvePlacements(file, keyOf, periodsOf);
+  const resolved = resolvePlacements(file, keyOf, periodsOf);
+  const { placements, unknownKeys } = resolved;
+  // a changed teacher was not part of the solve: the new teacher may clash
+  const problems = [...resolved.problems, ...teacherChanged.map((c) => `${c.subject} ${c.homeGroups.join("+")}: teacher ${c.from ?? "—"} → ${c.to ?? "—"} since the solve`)];
   if (unknownKeys.length) throw new ImportError("timetableMismatch");
   const rooms = await db.room.findMany({ select: { id: true, name: true } });
   const roomId = new Map(rooms.map((r) => [r.name, r.id]));
@@ -89,5 +92,5 @@ export async function importTimetable(
     });
     return tt;
   });
-  return { id: created.id, placements: placements.length, problems };
+  return { id: created.id, placements: placements.length, problems, teacherChanged };
 }

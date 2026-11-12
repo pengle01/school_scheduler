@@ -83,12 +83,14 @@ export function upgradeV1(v1: ExportV1File): { file: ExportFile; report: InferRe
     supportKind: null,
     band: null,
     long: l.long,
+    crossDay: false,
     fixedRoom: l.fixedRoom,
     roomMode: l.roomMode ?? "ANY",
     roomKind: l.roomKind ?? null,
     sameRoom: l.sameRoom ?? false,
     rooms: l.rooms ?? [],
     fixedSlots: l.fixedSlots ?? null,
+    after: [],
     note: l.note,
   });
   const subset = (lesson: LessonV2, groupName: string): LessonV2 => ({

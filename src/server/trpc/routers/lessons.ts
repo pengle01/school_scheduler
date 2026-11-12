@@ -22,18 +22,39 @@ const lessonInput = z.object({
   supportKind: supportKindEnum.nullable().optional(),
   bandId: z.string().nullable().optional(),
   long: z.boolean().optional(),
+  crossDay: z.boolean().optional(),
   fixedRoom: z.string().trim().nullable().optional(),
   roomMode: z.enum(["ANY", "PREFER", "ONLY"]).optional(),
   roomKind: z.string().trim().nullable().optional(),
   sameRoom: z.boolean().optional(),
   roomIds: z.array(z.string()).optional(),
   fixedSlots: z.array(FixedSlotSchema).nullable().optional(),
+  afterIds: z.array(z.string()).optional(), // rule O1: lessons this one follows
   note: z.string().trim().nullable().optional(),
 });
 
-function resolveShape(shape: string | undefined, periods: number): string {
+// Rule O1 links must not loop (A after B after A): the timetable would be impossible.
+async function checkOrder(db: Context["db"], id: string | undefined, afterIds: string[]) {
+  if (id && afterIds.includes(id)) throw new TRPCError({ code: "BAD_REQUEST", message: "orderSelf" });
+  if (!id || !afterIds.length) return;
+  const links = await db.lessonOrder.findMany({ select: { lessonId: true, afterId: true } });
+  const next = new Map<string, string[]>();
+  for (const l of links) if (l.lessonId !== id) next.set(l.lessonId, [...(next.get(l.lessonId) ?? []), l.afterId]);
+  next.set(id, afterIds);
+  const seen = new Set<string>();
+  const stack = [...afterIds];
+  while (stack.length) {
+    const x = stack.pop()!;
+    if (x === id) throw new TRPCError({ code: "BAD_REQUEST", message: "orderLoop" });
+    if (seen.has(x)) continue;
+    seen.add(x);
+    stack.push(...(next.get(x) ?? []));
+  }
+}
+
+function resolveShape(shape: string | undefined, periods: number, crossDay = false): string {
   if (!shape) return defaultShape(periods);
-  const normalised = normaliseShape(shape, periods);
+  const normalised = normaliseShape(shape, periods, crossDay);
   if (!normalised) throw new TRPCError({ code: "BAD_REQUEST", message: "badShape" });
   return normalised;
 }
@@ -92,6 +113,15 @@ export const lessonsRouter = createTRPCRouter({
     }),
   ),
 
+  // Lessons a lesson can follow (rule O1): the same teacher's other lessons.
+  orderCandidates: publicProcedure.input(z.object({ teacherId: z.string(), excludeId: z.string().optional() })).query(({ ctx, input }) =>
+    ctx.db.lesson.findMany({
+      where: { teacherId: input.teacherId, ...(input.excludeId ? { id: { not: input.excludeId } } : {}) },
+      select: { id: true, periods: true, audience: true, subject: { select: { name: true } }, homeGroups: { include: { homeGroup: { select: { name: true } } } } },
+      orderBy: [{ subject: { name: "asc" } }],
+    }),
+  ),
+
   // Same room for every period, for a whole category at once (the filtered lessons of the table).
   setSameRoom: adminProcedure.input(z.object({ ids: z.array(z.string()).min(1), value: z.boolean() })).mutation(async ({ ctx, input }) => {
     const r = await ctx.db.lesson.updateMany({ where: { id: { in: input.ids } }, data: { sameRoom: input.value } });
@@ -115,12 +145,13 @@ export const lessonsRouter = createTRPCRouter({
           subjectId: input.subjectId,
           teacherId: input.teacherId ?? null,
           periods: input.periods,
-          shape: resolveShape(input.shape, input.periods),
+          shape: resolveShape(input.shape, input.periods, input.crossDay ?? false),
           audience,
           hostLessonId: input.hostLessonId ?? null,
           supportKind: input.supportKind ?? null,
           bandId: input.bandId ?? null,
           long: input.long ?? false,
+          crossDay: input.crossDay ?? false,
           fixedRoom: input.fixedRoom ?? null,
           roomMode: input.roomMode ?? "ANY",
           roomKind: input.roomKind ?? null,
@@ -130,6 +161,7 @@ export const lessonsRouter = createTRPCRouter({
           homeGroups: { create: input.homeGroupIds.map((homeGroupId) => ({ homeGroupId })) },
           students: { create: studentIds.map((studentId) => ({ studentId })) },
           rooms: { create: (input.roomIds ?? []).map((roomId, rank) => ({ roomId, rank })) },
+          after: { create: [...new Set(input.afterIds ?? [])].map((afterId) => ({ afterId })) },
         },
         include: lessonInclude,
       });
@@ -139,12 +171,13 @@ export const lessonsRouter = createTRPCRouter({
   }),
 
   update: adminProcedure.input(lessonInput.partial().extend({ id: z.string() })).mutation(async ({ ctx, input }) => {
-    const { id, homeGroupIds, studentIds, shape, fixedSlots, roomIds, ...data } = input;
+    const { id, homeGroupIds, studentIds, shape, fixedSlots, roomIds, afterIds, ...data } = input;
+    if (afterIds !== undefined) await checkOrder(ctx.db, id, afterIds);
     if (data.roomMode === "ONLY" && roomIds !== undefined && roomIds.length === 0) throw new TRPCError({ code: "BAD_REQUEST", message: "roomsRequired" });
     const current = await ctx.db.lesson.findUnique({ where: { id }, include: { homeGroups: true, students: true } });
     if (!current) throw new TRPCError({ code: "NOT_FOUND" });
     const periods = data.periods ?? current.periods;
-    const nextShape = shape !== undefined ? resolveShape(shape, periods) : (normaliseShape(current.shape, periods) ?? defaultShape(periods));
+    const nextShape = shape !== undefined ? resolveShape(shape, periods, data.crossDay ?? current.crossDay) : (normaliseShape(current.shape, periods, data.crossDay ?? current.crossDay) ?? defaultShape(periods));
     const audience = data.audience ?? current.audience;
     const nextStudents = audience === "ALL" ? [] : (studentIds ?? current.students.map((s) => s.studentId));
     const nextGroups = homeGroupIds ?? current.homeGroups.map((h) => h.homeGroupId);
@@ -169,6 +202,7 @@ export const lessonsRouter = createTRPCRouter({
           ...(homeGroupIds ? { homeGroups: { deleteMany: {}, create: nextGroups.map((homeGroupId) => ({ homeGroupId })) } } : {}),
           ...(studentIds !== undefined || data.audience !== undefined ? { students: { deleteMany: {}, create: nextStudents.map((studentId) => ({ studentId })) } } : {}),
           ...(roomIds !== undefined ? { rooms: { deleteMany: {}, create: roomIds.map((roomId, rank) => ({ roomId, rank })) } } : {}),
+          ...(afterIds !== undefined ? { after: { deleteMany: {}, create: [...new Set(afterIds)].map((afterId) => ({ afterId })) } } : {}),
         },
         include: lessonInclude,
       });

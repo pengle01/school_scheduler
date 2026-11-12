@@ -77,12 +77,14 @@ export const LessonV2Schema = z.object({
   supportKind: supportKind.nullable().default(null),
   band: z.string().nullable().default(null),
   long: z.boolean().default(false),
+  crossDay: z.boolean().default(false), // one block of 2 runs last period of a day + first of the next
   fixedRoom: z.string().nullable().default(null),
   roomMode: roomMode.default("ANY"),
   roomKind: z.string().nullable().default(null),
   sameRoom: z.boolean().default(false), // all periods in one room, chosen from the room list
   rooms: z.array(z.string()).default([]),
   fixedSlots: z.array(FixedSlotSchema).nullable().default(null),
+  after: z.array(z.string()).default([]), // keys of the lessons this one follows (rule O1)
   note: z.string().nullable().default(null),
 });
 
@@ -242,6 +244,7 @@ export function danglingReferences(file: ExportFile): string[] {
     if (l.students) for (const s of l.students) if (!students.has(s)) problems.push(`${at}.students=${s}`);
     for (const r of l.rooms) if (!rooms.has(r)) problems.push(`${at}.rooms=${r}`);
     if (l.roomMode === "ONLY" && l.rooms.length === 0) problems.push(`${at}: roomMode ONLY without rooms`);
+    for (const k of l.after) if (!keys.has(k) || k === l.key) problems.push(`${at}.after=${k}`);
   });
   file.students.forEach((s, i) => {
     if (s.homeGroup && !homeGroups.has(s.homeGroup)) problems.push(`students[${i}].homeGroup=${s.homeGroup}`);

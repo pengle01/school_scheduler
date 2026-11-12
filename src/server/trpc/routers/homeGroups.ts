@@ -23,7 +23,8 @@ export const lessonInclude = {
   students: { select: { studentId: true } },
   excusals: { select: { studentId: true } },
   hostLesson: { select: { id: true, subject: { select: { name: true } }, homeGroups: { include: { homeGroup: { select: { name: true } } } } } },
-  _count: { select: { supports: true } },
+  after: { select: { afterId: true } },
+  _count: { select: { supports: true, followers: true } },
 } as const;
 
 export const homeGroupsRouter = createTRPCRouter({
