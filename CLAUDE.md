@@ -55,7 +55,7 @@ src/lib/orologio/{parse,convert}.ts               Orologio .DAT/.REL/.RES → ex
 src/server/import.ts                              applyImport/parseExportFile, shared by the data router and scripts/import-json.mts
 scripts/*.mts                                     CLIs run with tsx: orologio-to-json, import-json
 solver/                                           Python (.venv, OR-Tools CP-SAT): data.py (load v2 JSON, attendance/atoms), patterns.py (units,
-                                                  blocks, placements), model.py, solve.py, rooms.py (room phase), verify.py (independent),
+                                                  blocks, placements), model.py, solve.py, rooms.py (room phase), joint.py (rooms in the time model), verify.py (independent),
                                                   report.py (JSON + xlsx), tests/
 src/trpc/{client,provider,server,types}.ts        client hooks, server caller, RouterOutputs
 prisma/schema.prisma                              single source of truth
@@ -94,10 +94,18 @@ prisma/schema.prisma                              single source of truth
 - Orologio's virtual classes/pools are *derived* from these (`src/lib/structure.ts`); the
   Orologio converter emits the old v1 shape internally and calls `upgradeV1`.
 - `fixedSlots` (`[{day, periods}]`) locks a lesson's placement (hotel full-day workshops).
+- `crossDay`: one block runs across two days; the shape is kept in written order and its first two chunks
+  are the split — "3+4" = the last 3 periods of a day, then periods 1–4 of the next (Mon→Tue … Thu→Fri);
+  further chunks are placed as usual. Solver: `Lesson.split`, `Placement.split`; app: `crossDaySplit`. `--ignore-grid`
+  (solve/verify) drops `Band.fixedSlots` so the solver places the zones itself.
 - **Rooms**: `Room {name, kind, capacity}`; a lesson has `roomMode` ANY|PREFER|ONLY, optional `roomKind`
   and an ordered `LessonRoom` list. `sameRoom` = every period in one room chosen from the list (hard in
   the room phase; otherwise one room per lesson is only a soft preference). The solver's room phase
-  (`solver/rooms.py`) runs after the time phase; `fixedRoom` is legacy text, read only when a lesson has no room list.
+  (`solver/rooms.py`) runs after the time phase; with `--rooms joint` (default) `solver/joint.py` first puts a
+  room choice per lesson (z vars; explicit rooms + counted pools) into both solve stages; `fixedRoom` is legacy text, read only when a lesson has no room list.
+- **O1**: `LessonOrder {lessonId, afterId}` ("Comes after" in the lesson form, export `after: [keys]`); the
+  lesson's period k comes after period k of each `after` lesson, in week order (`order_sets` in solver/data.py).
+  Entered by hand only — nothing is inferred from subject or teacher. The router refuses loops.
 - **Block shape** `"2+1+1"` = daily chunks summing to `periods`; stored largest first
   (`src/lib/shape.ts`). Empty shape → all singles.
 - Week: Mon 8, Tue 7, Wed 7, Thu 8, Fri 7 periods (`Setting daysPeriods`); `periodExists()` guards period 8.

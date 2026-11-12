@@ -108,6 +108,11 @@ periods and checks the grid (a teacher or pupils in two zones at one slot, wrong
 solver treats the grid as locks and builds the rest around it. `npm run zone-grid -- <export.json>`
 loads a grid from a file; the Orologio conversion carries this year's grid.
 
+**Across days**: a lesson marked "Αλλαγή ημέρας" has one block that runs across two days. Its shape
+gives the split in written order: `3+4` = the last 3 periods of a day, then periods 1–4 of the next
+(Mon→Tue … Thu→Fri); `2+1+1` = last 2, then period 1, plus one more single elsewhere. **Ignoring the zone grid**: add
+`--ignore-grid` to `python -m solver solve` (and to `verify`) to let the solver place the zones.
+
 **Support**: ΣΤ always runs during French, one period of Greek and one of Maths. ΑΣΤ and ΕΞΣΤ have no
 host lesson: on the Στήριξη page each pupil is excused from the lessons the ministry names, and with a
 full week the solver can only place the support lesson in a freed period. `--hint` matches a previous
@@ -119,10 +124,23 @@ shows the week per teacher, pupil, home group or room, and a click on a period o
 with its band options, its host or its support lessons at that moment. Import right after
 solving: the file's lesson keys follow the export order, so they drift when lessons change.
 
-**Room phase** (`solver/rooms.py`) runs after the times are fixed (also on its own:
+**Rule O1 — lesson order**: a lesson's "Comes after" list (lesson form; `LessonOrder` rows, `after`
+keys in the export) names lessons of the same teacher it follows, e.g. Physics ΘΗΨ2α+ΘΗΨ2β after
+ΘΗΨ2α and after ΘΗΨ2β. Its k-th period in the week comes after the k-th period of each of them
+(α, β, joint, α, β, joint, joint); periods left over go anywhere after. Loops are refused. Hard by
+default, can be made soft or switched off per teacher. Lessons with links show ↻ in Διδασκαλίες.
+
+**Rooms with the times** (`solver/joint.py`, default; `--rooms after` turns it off): each lesson
+chooses its room for the week inside the time model, among its first 6 listed rooms or a pool of
+its other candidates (checked by counting: lessons confined to a set of rooms never outnumber
+them). So the times always leave a room for every "only these" lesson, and stage 2 weighs room
+preferences and R4 against the teachers' days. The model grows from about 104k variables / 76k
+constraints to 171k / 144k on the 2026-27 data; expect roughly 1.5–2× the memory of `--rooms after`.
+
+**Room phase** (`solver/rooms.py`) runs after the times are fixed, starting from the joint choice (also on its own:
 `python -m solver rooms <data.json> <timetable.json>`): one lesson per room per period;
-"only these rooms" and room types are hard, preferences (in order), one room per lesson
-and few room changes per teacher per day (R3) are soft; capacity shortfalls are reported. A lesson
+"only these rooms" and room types are hard, preferences (in order), one room per lesson,
+few room changes per teacher per day (R3) and few different rooms per teacher in the week (R4) are soft; capacity shortfalls are reported. A lesson
 marked "same room for every period" (set per lesson, or for a whole filtered category on the
 Διδασκαλίες page) takes one room from its list for all its periods — hard.
 Cross-day blocks are not handled yet.
