@@ -3,6 +3,7 @@
 import { useTranslations } from "next-intl";
 import { periodExists, maxPeriods, DEFAULT_DAYS_PERIODS } from "@/lib/calendar";
 import { cn } from "@/lib/utils";
+import { SUPPORT_TONE } from "@/lib/supportTone";
 
 export const DAY_KEYS = ["mon", "tue", "wed", "thu", "fri"] as const;
 
@@ -11,7 +12,7 @@ export type GridChip = {
   title: string;
   subtitle?: string;
   room?: string | null;
-  tone?: "normal" | "support" | "band" | "merge";
+  tone?: "normal" | "ST" | "AST" | "EXST" | "band" | "merge";
 };
 
 export type GridCell = {
@@ -41,7 +42,9 @@ export function WeekGrid({
   const periods = Array.from({ length: maxPeriods(daysPeriods) }, (_, i) => i + 1);
   const toneClass: Record<NonNullable<GridChip["tone"]>, string> = {
     normal: "bg-white border-slate-200 hover:border-emerald-400",
-    support: "bg-amber-50 border-amber-200 hover:border-amber-400",
+    ST: SUPPORT_TONE.ST.chip,
+    AST: SUPPORT_TONE.AST.chip,
+    EXST: SUPPORT_TONE.EXST.chip,
     band: "bg-violet-50 border-violet-200 hover:border-violet-400",
     merge: "bg-sky-50 border-sky-200 hover:border-sky-400",
   };

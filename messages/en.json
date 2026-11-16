@@ -2,7 +2,9 @@
   "common": {
     "appName": "Timetable — Data",
     "openMenu": "Open menu",
-    "closeMenu": "Close menu"
+    "closeMenu": "Close menu",
+    "collapseSidebar": "Collapse menu",
+    "expandSidebar": "Expand menu"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -307,6 +309,9 @@
     "deleteWithSupport": "The {n} support lessons that run during it will be deleted too.",
     "cancel": "Cancel",
     "sameRoom": "Same room for every period",
+    "filterColumn": "Filter",
+    "clearFilters": "Clear the column filters",
+    "numberFilterHint": "A number or a comparison: 3, >3, <=2, 2-4",
     "crossDay": "Across days: last period + 1st of the next day",
     "orderAfter": "Comes after {n, plural, one {# lesson} other {# lessons}} (rule O1)",
     "orderBefore": "{n, plural, one {# lesson comes} other {# lessons come}} after this one (rule O1)"
@@ -475,7 +480,7 @@
     },
     "T4": {
       "name": "Daily maximum",
-      "description": "Max periods per day (day7 on 7-period days, day8 on 8-period days). longExempt: long workshops are exempt."
+      "description": "Max periods per day (day7 on 7-period days, day8 on 8-period days). longExempt: a long lesson is left out only on a day when its own periods exceed the limit (a full-day workshop); other long lessons count as usual."
     },
     "G1": {
       "name": "Teacher gaps",

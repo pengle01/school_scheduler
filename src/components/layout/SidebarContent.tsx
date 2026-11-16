@@ -18,6 +18,8 @@ import {
   CalendarDays,
   LifeBuoy,
   Grid3x3,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -45,7 +47,8 @@ export const NAV_ITEMS: NavItem[] = [
   { key: "data", href: "data", icon: Database },
 ];
 
-export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
+// collapsed: icons only (labels become tooltips). onToggle: shows the collapse button (desktop sidebar).
+export function SidebarContent({ onNavigate, collapsed = false, onToggle }: { onNavigate?: () => void; collapsed?: boolean; onToggle?: () => void }) {
   const t = useTranslations("nav");
   const tCommon = useTranslations("common");
   const locale = useLocale();
@@ -53,11 +56,11 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
   return (
     <div className="flex flex-col h-full bg-emerald-950">
-      <div className="flex items-center gap-3 px-5 py-5 border-b border-emerald-900">
-        <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-lime-400">
+      <div className={cn("flex items-center gap-3 py-5 border-b border-emerald-900", collapsed ? "justify-center px-2" : "px-5")}>
+        <div className="flex items-center justify-center w-9 h-9 shrink-0 rounded-lg bg-lime-400">
           <CalendarRange className="w-5 h-5 text-emerald-900" />
         </div>
-        <span className="font-semibold text-white text-sm leading-tight">{tCommon("appName")}</span>
+        {!collapsed && <span className="font-semibold text-white text-sm leading-tight">{tCommon("appName")}</span>}
       </div>
       <nav className="flex-1 overflow-y-auto py-3">
         {NAV_ITEMS.map((item) => {
@@ -69,17 +72,32 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
               key={item.key}
               href={href}
               onClick={onNavigate}
+              title={collapsed ? t(item.key) : undefined}
+              aria-label={collapsed ? t(item.key) : undefined}
               className={cn(
-                "flex items-center gap-3 mx-2 my-0.5 px-3 py-2 rounded-lg text-sm transition-colors",
+                "flex items-center gap-3 mx-2 my-0.5 py-2 rounded-lg text-sm transition-colors",
+                collapsed ? "justify-center px-0" : "px-3",
                 active ? "bg-emerald-800 text-white font-medium" : "text-emerald-200 hover:bg-emerald-900 hover:text-white",
               )}
             >
               <Icon className="w-4 h-4 shrink-0" />
-              {t(item.key)}
+              {!collapsed && t(item.key)}
             </Link>
           );
         })}
       </nav>
+      {onToggle && (
+        <button
+          type="button"
+          onClick={onToggle}
+          title={tCommon(collapsed ? "expandSidebar" : "collapseSidebar")}
+          aria-label={tCommon(collapsed ? "expandSidebar" : "collapseSidebar")}
+          className={cn("flex items-center gap-3 mx-2 my-2 py-2 rounded-lg text-sm text-emerald-200 hover:bg-emerald-900 hover:text-white", collapsed ? "justify-center px-0" : "px-3")}
+        >
+          {collapsed ? <PanelLeftOpen className="w-4 h-4 shrink-0" /> : <PanelLeftClose className="w-4 h-4 shrink-0" />}
+          {!collapsed && tCommon("collapseSidebar")}
+        </button>
+      )}
     </div>
   );
 }

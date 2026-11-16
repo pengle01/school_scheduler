@@ -11,6 +11,7 @@ import { DEFAULT_DAYS_PERIODS, totalSlots } from "@/lib/calendar";
 import { StudentLessonsDialog } from "@/components/StudentLessonsDialog";
 import { stIssues } from "@/lib/support";
 import { cn } from "@/lib/utils";
+import { SUPPORT_TONE } from "@/lib/supportTone";
 
 type Lesson = RouterOutputs["lessons"]["list"][number];
 type Filter = "problems" | "support" | "all";
@@ -112,7 +113,8 @@ export function SupportTable() {
                 <td className="px-3 py-1.5 text-xs text-slate-600">
                   {individual.map((l) => (
                     <div key={l.id}>
-                      {l.supportKind} · {lessonLabel(l)}
+                      {l.supportKind && <span className={cn("mr-1 rounded border px-1", SUPPORT_TONE[l.supportKind].badge)}>{l.supportKind}</span>}
+                      {lessonLabel(l)}
                     </div>
                   ))}
                 </td>

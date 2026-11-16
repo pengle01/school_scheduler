@@ -173,7 +173,7 @@ export function TimetableViewer() {
       title: l.subject.name,
       subtitle: view === "teacher" ? groups : view === "homeGroup" ? teacher : `${groups} · ${teacher}`,
       room: p.roomId ? roomName.get(p.roomId) : null,
-      tone: l.hostLessonId ? "support" : l.bandId ? "band" : l.homeGroups.length > 1 ? "merge" : "normal",
+      tone: l.supportKind ? l.supportKind : l.bandId ? "band" : l.homeGroups.length > 1 ? "merge" : "normal",
     };
   };
   const cells = (day: number, period: number): GridCell => {
