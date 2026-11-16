@@ -120,11 +120,11 @@ def verify(school: School, placements: list[dict]) -> list[Violation]:
 
     # T3 / T4 per teacher
     t3, t4 = school.rule("T3"), school.rule("T4")
-    occ: dict[str, dict[int, list[tuple[int, bool]]]] = defaultdict(lambda: defaultdict(list))  # teacher → day → [(period, long)]
+    occ: dict[str, dict[int, list[tuple[int, str]]]] = defaultdict(lambda: defaultdict(list))  # teacher → day → [(period, lesson)]
     for l in school.lessons.values():
         if l.teacher:
             for d, p in slots_of.get(l.key, []):
-                occ[l.teacher][d].append((p, l.long))
+                occ[l.teacher][d].append((p, l.key))
     for t, days in occ.items():
         mode3, _ = t3.for_teacher(t)
         last = sum(1 for d, ps in days.items() if any(p == school.last_period(d) for p, _ in ps))
@@ -132,8 +132,13 @@ def verify(school: School, placements: list[dict]) -> list[Violation]:
             v.append(Violation("T3", f"{t}: {last} last periods"))
         mode4, _ = t4.for_teacher(t)
         for d, ps in days.items():
-            counted = [p for p, lng in ps if not (lng and t4.params.get("longExempt", True))]
             limit = int(t4.params.get("day8" if school.last_period(d) >= 8 else "day7", 5))
+            # a long lesson is left out only when its own periods on the day exceed the limit
+            per_lesson: dict[str, int] = defaultdict(int)
+            for _, k in ps:
+                per_lesson[k] += 1
+            exempt = {k for k, n in per_lesson.items() if school.lessons[k].long and t4.params.get("longExempt", True) and n > limit}
+            counted = [p for p, k in ps if k not in exempt]
             if mode4 == "HARD" and len(counted) > limit:
                 v.append(Violation("T4", f"{t}: {len(counted)} periods on day {d} (limit {limit})"))
 
@@ -165,14 +170,16 @@ def verify(school: School, placements: list[dict]) -> list[Violation]:
             if len(used) > 1:
                 v.append(Violation("SAMEROOM" if l.same_room else "R3", f"{l.label}: {len(used)} different rooms", hard=l.same_room))
 
-    # Soft counts, reported but not failing
-    t2max = int(school.rule("T2").params.get("max", 2))
+    # T2: failing where the rule is hard for the teacher, otherwise a count
+    t2 = school.rule("T2")
+    t2max = int(t2.params.get("max", 2))
     for t, days in occ.items():
+        mode2, _ = t2.for_teacher(t)
         for d, ps in days.items():
             periods = sorted(p for p, _ in ps)
             for r in _runs(periods):
                 if len(r) > t2max:
-                    v.append(Violation("T2", f"{t}: {len(r)} consecutive on day {d}", hard=False))
+                    v.append(Violation("T2", f"{t}: {len(r)} consecutive on day {d}", hard=mode2 == "HARD"))
             if periods and (periods[-1] - periods[0] + 1) > len(periods):
                 v.append(Violation("G1", f"{t}: {periods[-1] - periods[0] + 1 - len(periods)} gap(s) on day {d}", hard=False))
     return v

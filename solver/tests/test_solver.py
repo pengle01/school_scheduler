@@ -267,3 +267,56 @@ def test_build_rejects_block_without_placement(tmp_path):
     s.teachers["Γ"].unavailable = set(s.slots())
     with pytest.raises(ValueError):
         build(s)
+
+
+def _workshop_teacher(tmp_path, free_days):
+    """Teacher Χ: three long lessons of 3 periods (one block each), free only on `free_days`."""
+    path = mini_school(tmp_path)
+    doc = json.loads(path.read_text(encoding="utf-8"))
+    doc["teachers"].append(T("Χ"))
+    doc["teachers"][-1]["unavailability"] = [{"day": d, "period": p, "kind": "HARD"} for d in range(1, 6) if d not in free_days for p in range(1, 9)]
+    doc["homeGroups"] += [{"name": g, "year": "A", "direction": "PRACTICE", "note": None} for g in ("Χ1", "Χ2", "Χ3")]
+    doc["lessons"] += [L(f"L{20 + i}", "Εργαστήριο", [f"Χ{i}"], "Χ", 3, "3", long=True) for i in (1, 2, 3)]
+    path.write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
+    return load(path)
+
+
+def test_short_long_lessons_count_towards_the_daily_maximum(tmp_path):
+    # 9 periods of 3-period workshops: Monday alone (limit 6) cannot hold them, Monday + Tuesday can
+    assert solve(_workshop_teacher(tmp_path, {1}), time_limit=20, workers=4, log=lambda *_: None, explain=False).status == "INFEASIBLE"
+    s = _workshop_teacher(tmp_path, {1, 2})
+    res = solve(s, time_limit=20, workers=4, log=lambda *_: None, explain=False)
+    assert res.status in ("OPTIMAL", "FEASIBLE")
+    assert [v for v in verify(s, res.placements) if v.hard] == []
+    per_day = {}
+    for p in res.placements:
+        if p["lesson"] in ("L21", "L22", "L23"):
+            per_day[p["day"]] = per_day.get(p["day"], 0) + 1
+    assert per_day == {1: 6, 2: 3}  # Tuesday's limit is 5
+
+
+def test_verify_counts_short_long_lessons_but_not_a_full_day_workshop(tmp_path):
+    s = _workshop_teacher(tmp_path, {1})
+    monday = [{"lesson": f"L2{i}", "day": 1, "period": 3 * (i - 1) + p} for i in (1, 2, 3) for p in (1, 2, 3) if 3 * (i - 1) + p <= 8]
+    assert any(v.code == "T4" and v.hard for v in verify(s, monday))
+    # the locked 7-period workshop of ΕΓ (limit 5 on Wednesday) is still exempt
+    workshop = [{"lesson": "L11", "day": 3, "period": p} for p in range(1, 8)]
+    assert not [v for v in verify(s, workshop) if v.code == "T4"]
+
+
+def test_hard_consecutive_limit_holds_from_stage_one_and_is_verified(tmp_path):
+    s = load(mini_school(tmp_path))
+    s.rules["T2"].mode = "HARD"
+    s.rules["T2"].params = {"max": 1}
+    s.rules["T2"].overrides["ΕΓ"] = ("OFF", 1)  # the full-day workshop
+    for l in s.lessons.values():  # no double periods, or max 1 cannot hold
+        if l.teacher != "ΕΓ":
+            l.shape = [1] * l.periods
+    res = solve(s, time_limit=30, workers=4, log=lambda *_: None, explain=False)
+    assert res.status in ("OPTIMAL", "FEASIBLE")
+    assert [v for v in verify(s, res.placements) if v.hard] == []
+    # two periods in a row for Μ: hard for Μ, only counted for the exempt teacher
+    bad = [v for v in verify(s, [{"lesson": "L01", "day": 2, "period": p} for p in (1, 2, 3)]) if v.code == "T2"]
+    assert bad and all(v.hard for v in bad)
+    workshop = [v for v in verify(s, [{"lesson": "L11", "day": 3, "period": p} for p in range(1, 8)]) if v.code == "T2"]
+    assert workshop and not any(v.hard for v in workshop)

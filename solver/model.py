@@ -191,16 +191,28 @@ def build(
             cp.Add(over >= sum(last) - limit)
             m.penalties["T3"].append((weight, over))
 
-    # ── T4: daily maximum (long lessons exempt) ──
+    # ── T4: daily maximum. A long lesson is left out only on a day when its own periods
+    #    exceed the limit (a full-day workshop); shorter long lessons count like any other. ──
     t4 = school.rule("T4")
+    long_exempt = bool(t4.params.get("longExempt", True))
     for t, tus in by_teacher.items():
         mode, weight = t4.for_teacher(t)
         if mode == "OFF" or (mode == "HARD" and "T4" in relax):
             continue
-        counted = [u for u in tus if not (u.long and t4.params.get("longExempt", True))]
         for d in school.days:
             limit = int(t4.params.get("day8" if school.last_period(d) >= 8 else "day7", 5))
-            terms = [m.occ[(u.id, d, p)] for u in counted for p in school.periods(d)]
+            terms: list = []
+            for u in tus:
+                on_day = [m.occ[(u.id, d, p)] for p in school.periods(d)]
+                if not (long_exempt and u.long and u.periods > limit and len(on_day) > limit):
+                    terms.extend(on_day)
+                    continue
+                # counted = the unit's periods on this day, or 0 when they exceed the limit
+                exempt = cp.NewBoolVar(f"t4x[{t}][{u.id}][{d}]")
+                counted = cp.NewIntVar(0, limit, f"t4n[{t}][{u.id}][{d}]")
+                cp.Add(sum(on_day) >= (limit + 1) * exempt)
+                cp.Add(counted >= sum(on_day) - len(on_day) * exempt)
+                terms.append(counted)
             if not terms:
                 continue
             if mode == "HARD":

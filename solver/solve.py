@@ -144,8 +144,9 @@ def solve(
     if pupils_hard:
         quiet = School(**{**school.__dict__})
         quiet.rules = dict(school.rules)
-        for code in ("T2", "G1"):
-            quiet.rules[code] = type(school.rules[code])(code, "OFF", 1, {})
+        for code in ("T2", "G1"):  # comfort rules wait for stage 2; a hard one is a rule of stage 1 too
+            if school.rule(code).mode != "HARD":
+                quiet.rules[code] = type(school.rules[code])(code, "OFF", 1, {})
         if school.rule("B1").mode != "HARD":  # shapes come back in stage 2
             quiet.rules["B1"] = type(school.rules["B1"])("B1", "SOFT", 0, {})
         possible = set(school.atoms) - set(impossible)
