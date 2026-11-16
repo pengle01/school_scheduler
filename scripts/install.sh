@@ -115,7 +115,7 @@ say "Building"
 run_as_user npm run build
 
 # ── 5. Solver (Python + OR-Tools) ────────────────────────────────────────────
-if ! python3 -c 'import venv' >/dev/null 2>&1; then $SUDO apt-get install -y python3-venv; fi
+if ! python3 -c 'import ensurepip' >/dev/null 2>&1; then $SUDO apt-get install -y python3-venv; fi
 say "Installing the solver (Python venv)"
 run_as_user python3 -m venv .venv
 run_as_user .venv/bin/pip install -q -r solver/requirements.txt
