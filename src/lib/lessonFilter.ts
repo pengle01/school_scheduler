@@ -111,6 +111,14 @@ export function matchesColumnFilters(l: FilterableLesson, filters: ColumnFilters
   return true;
 }
 
+// The "same room for every period" switch as a filter of its own: every lesson, only those with it, only those without.
+export type SameRoomFilter = "ANY" | "ON" | "OFF";
+export const SAME_ROOM_FILTERS: SameRoomFilter[] = ["ANY", "ON", "OFF"];
+
+export function matchesSameRoom(l: { sameRoom: boolean }, filter: SameRoomFilter): boolean {
+  return filter === "ANY" || l.sameRoom === (filter === "ON");
+}
+
 export function hasColumnFilters(filters: ColumnFilters): boolean {
   return FILTER_COLUMNS.some((c) => !!filters[c]?.trim());
 }

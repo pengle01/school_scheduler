@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hasColumnFilters, lessonColumnText, matchNumber, matchesColumnFilters, normalizeText, type FilterableLesson } from "@/lib/lessonFilter";
+import { hasColumnFilters, lessonColumnText, matchNumber, matchesColumnFilters, matchesSameRoom, normalizeText, type FilterableLesson } from "@/lib/lessonFilter";
 
 const labels = { vacancy: "κενή θέση", all: "όλοι", merge: "συνδιδασκαλία", band: "ζώνη", during: "κατά", supportKind: { ST: "ΣΤ — στήριξη", AST: "ΑΣΤ" } };
 
@@ -101,5 +101,15 @@ describe("hasColumnFilters", () => {
     expect(hasColumnFilters({})).toBe(false);
     expect(hasColumnFilters({ note: " " })).toBe(false);
     expect(hasColumnFilters({ note: "x" })).toBe(true);
+  });
+});
+
+describe("matchesSameRoom", () => {
+  it("keeps every lesson, only those with the switch, or only those without", () => {
+    const on = lesson({ sameRoom: true });
+    const off = lesson({ sameRoom: false });
+    expect([matchesSameRoom(on, "ANY"), matchesSameRoom(off, "ANY")]).toEqual([true, true]);
+    expect([matchesSameRoom(on, "ON"), matchesSameRoom(off, "ON")]).toEqual([true, false]);
+    expect([matchesSameRoom(on, "OFF"), matchesSameRoom(off, "OFF")]).toEqual([false, true]);
   });
 });

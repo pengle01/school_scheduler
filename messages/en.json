@@ -278,6 +278,9 @@
       "BAND": "Bands",
       "VACANCY": "Vacancies"
     },
+    "sameRoomFilter": "Same room:",
+    "sameRoomFilterHint": "Shows only the lessons with, or without, 'same room for every period'.",
+    "sameRoomState": { "ANY": "all", "ON": "yes", "OFF": "no" },
     "sameRoomShown": "Same room for the shown lessons:",
     "sameRoomHint": "Sets, for every lesson the filter shows, whether all its periods are held in one room.",
     "sameRoomDone": "{n} lessons updated.",

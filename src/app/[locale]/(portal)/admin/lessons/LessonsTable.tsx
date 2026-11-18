@@ -11,7 +11,7 @@ import { LessonDialog } from "@/components/LessonDialog";
 import { cn } from "@/lib/utils";
 import { useErrorToast } from "@/components/useErrorToast";
 import { toast } from "sonner";
-import { hasColumnFilters, matchesColumnFilters, type ColumnFilters, type FilterLabels } from "@/lib/lessonFilter";
+import { SAME_ROOM_FILTERS, hasColumnFilters, matchesColumnFilters, matchesSameRoom, type ColumnFilters, type FilterLabels, type SameRoomFilter } from "@/lib/lessonFilter";
 
 type Filter = "ALL" | "PLAIN" | "MERGE" | "SUPPORT" | "BAND" | "VACANCY";
 const FILTERS: Filter[] = ["ALL", "PLAIN", "MERGE", "SUPPORT", "BAND", "VACANCY"];
@@ -23,6 +23,7 @@ export function LessonsTable() {
   const list = trpc.lessons.list.useQuery();
   const [text, setText] = useState("");
   const [filter, setFilter] = useState<Filter>("ALL");
+  const [sameRoom, setSameRoomFilter] = useState<SameRoomFilter>("ANY");
   const [adding, setAdding] = useState(false);
   const [columnFilters, setColumnFilters] = useState<ColumnFilters>({});
   // the words the table's cells show, so the column filters find them
@@ -55,12 +56,13 @@ export function LessonsTable() {
       if (filter === "SUPPORT" && !l.supportKind) return false;
       if (filter === "BAND" && !l.bandId) return false;
       if (filter === "VACANCY" && l.teacherId) return false;
+      if (!matchesSameRoom(l, sameRoom)) return false;
       if (!matchesColumnFilters(l, columnFilters, labels)) return false;
       if (!f) return true;
       const hay = `${l.homeGroups.map((h) => h.homeGroup.name).join(" ")} ${l.subject.name} ${l.teacher?.name ?? ""} ${l.band?.name ?? ""} ${l.note ?? ""}`.toLowerCase();
       return hay.includes(f);
     });
-  }, [list.data, text, filter, columnFilters, labels]);
+  }, [list.data, text, filter, sameRoom, columnFilters, labels]);
 
   if (list.isLoading) return <p className="text-slate-500 text-sm">…</p>;
 
@@ -75,8 +77,16 @@ export function LessonsTable() {
             </button>
           ))}
         </div>
+        <div className="flex items-center gap-1 rounded-md border border-slate-200 p-0.5" title={t("sameRoomFilterHint")}>
+          <span className="px-1 text-xs text-slate-500">{t("sameRoomFilter")}</span>
+          {SAME_ROOM_FILTERS.map((f) => (
+            <button key={f} type="button" onClick={() => setSameRoomFilter(f)} className={cn("px-2 py-1 rounded text-xs", sameRoom === f ? "bg-sky-600 text-white" : "text-slate-600 hover:bg-slate-100")}>
+              {t(`sameRoomState.${f}`)}
+            </button>
+          ))}
+        </div>
         <span className="text-sm text-slate-500">{t("count", { shown: rows.length, total: list.data?.length ?? 0 })}</span>
-        {(text.trim() || filter !== "ALL" || hasColumnFilters(columnFilters)) && rows.length > 0 && (
+        {(text.trim() || filter !== "ALL" || sameRoom !== "ANY" || hasColumnFilters(columnFilters)) && rows.length > 0 && (
           <span className="inline-flex items-center gap-1 text-xs text-slate-600 rounded-md border border-slate-200 px-2 py-1" title={t("sameRoomHint")}>
             {t("sameRoomShown")}
             <Button size="xs" variant="ghost" disabled={setSameRoom.isPending} onClick={() => setSameRoom.mutate({ ids: rows.map((l) => l.id), value: true })}>{t("yes")}</Button>
